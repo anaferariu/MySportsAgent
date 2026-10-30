@@ -7,6 +7,9 @@ const path = require('path');
 
 process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'msa-api-'));
 delete process.env.SEARCH_ENGINE;
+delete process.env.ALLOW_VIDEO_UPLOADS;
+// 91 seeded players + room for exactly one more, so the cap is reachable in tests.
+process.env.MAX_PLAYERS = '92';
 const app = require('../server/index');
 
 let server;
@@ -63,6 +66,31 @@ test('a player added through the form is returned with age only', async () => {
   const player = await res.json();
   assert.equal('dob' in player, false);
   assert.equal(typeof player.age, 'number');
+});
+
+test('video uploads are refused and nothing is saved', async () => {
+  const before = (await (await fetch(`${base}/api/players`)).json()).length;
+  const form = new FormData();
+  form.append('firstName', 'Video');
+  form.append('lastName', 'Attempt');
+  form.append('position', 'Guard');
+  form.append('highlightVideo', new Blob(['not really a video']), 'clip.mp4');
+  const res = await fetch(`${base}/api/players`, { method: 'POST', body: form });
+  assert.equal(res.status, 403);
+  assert.match((await res.json()).error, /video uploads are disabled for safety reasons/);
+  const after = (await (await fetch(`${base}/api/players`)).json()).length;
+  assert.equal(after, before);
+  assert.equal(fs.existsSync(path.join(process.env.DATA_DIR, 'uploads')), false);
+});
+
+test('adding players stops at the cap', async () => {
+  const form = new FormData();
+  form.append('firstName', 'One');
+  form.append('lastName', 'TooMany');
+  form.append('position', 'Center');
+  const res = await fetch(`${base}/api/players`, { method: 'POST', body: form });
+  assert.equal(res.status, 409);
+  assert.match((await res.json()).error, /database is full \(92 players\)/);
 });
 
 test('the sample boxscore uploads and updates 18 players', async () => {

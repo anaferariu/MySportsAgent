@@ -24,7 +24,7 @@ The seed files are plain CSVs in [`data/seed/`](data/seed/) and are listed in [`
 
 - **Scout assistant**: ask in plain English and get a ranked table of matching players.
 - **Player database**: a filterable table of all players.
-- **ScoutBoard**: add your own player with season averages, traits, notes and an optional highlight video.
+- **ScoutBoard**: add your own player with season averages, traits and notes. The database is capped at 500 players (`MAX_PLAYERS`). Highlight-video uploads are switched off on the public demo; set `ALLOW_VIDEO_UPLOADS=true` to enable them.
 - **Boxscore upload**: upload a game boxscore (xlsx/csv). Each row is folded into that player's season averages; shooting percentages are recomputed from makes and attempts. Try [`data/samples/wnba-finals-2025-game4.csv`](data/samples/wnba-finals-2025-game4.csv).
 
 ## Run locally
@@ -92,6 +92,8 @@ The free plan has no persistent disk, so the database is rebuilt from the seed f
 | `SEARCH_ENGINE` | `rules` | `rules` or `agent` |
 | `ANTHROPIC_API_KEY` | | Needed for `SEARCH_ENGINE=agent` |
 | `ANTHROPIC_MODEL` | `claude-opus-5-5` | Model for the agent |
+| `MAX_PLAYERS` | `500` | Maximum players in the database; adding more is refused |
+| `ALLOW_VIDEO_UPLOADS` | `false` | `true` lets visitors attach highlight videos |
 | `DATA_DIR` | `./data` | Where the database and uploads live |
 | `PORT` | `3000` | HTTP port |
 

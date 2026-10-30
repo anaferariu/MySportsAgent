@@ -16,9 +16,24 @@ const SEED_DIR = path.join(ROOT_DIR, 'data', 'seed');
 const UPLOADS_DIR = path.join(DATA_DIR, 'uploads');
 const DB_PATH = path.join(DATA_DIR, 'players.db');
 
-fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+// Highlight-video uploads are off by default on the public demo. Set
+// ALLOW_VIDEO_UPLOADS=true to turn them back on.
+const VIDEO_UPLOADS_ENABLED = process.env.ALLOW_VIDEO_UPLOADS === 'true';
+const VIDEO_DISABLED_MESSAGE = 'For demo only: video uploads are disabled for safety reasons.';
+
+// The public demo caps the database so anonymous visitors can't grow it without bound.
+const MAX_PLAYERS = Number(process.env.MAX_PLAYERS) || 500;
+
+if (VIDEO_UPLOADS_ENABLED) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
 const store = openDatabase({ dbPath: DB_PATH, seedDir: SEED_DIR });
+
+class ClientError extends Error {
+  constructor(message, status = 400) {
+    super(message);
+    this.status = status;
+  }
+}
 
 const VIDEO_EXTENSIONS = new Set(['.mp4', '.mov', '.avi', '.mpg', '.mpeg', '.mkv', '.webm']);
 const BOXSCORE_EXTENSIONS = new Set(['.xlsx', '.xls', '.csv']);
@@ -30,8 +45,10 @@ const videoUpload = multer({
   }),
   limits: { fileSize: 25 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
+    // Rejected before anything is written to disk.
+    if (!VIDEO_UPLOADS_ENABLED) return cb(new ClientError(VIDEO_DISABLED_MESSAGE, 403));
     if (!VIDEO_EXTENSIONS.has(path.extname(file.originalname).toLowerCase())) {
-      return cb(new Error('Unsupported video format. Allowed: mp4, mov, avi, mpg, mpeg, mkv, webm'));
+      return cb(new ClientError('Unsupported video format. Allowed: mp4, mov, avi, mpg, mpeg, mkv, webm'));
     }
     return cb(null, true);
   }
@@ -42,7 +59,7 @@ const boxscoreUpload = multer({
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     if (!BOXSCORE_EXTENSIONS.has(path.extname(file.originalname).toLowerCase())) {
-      return cb(new Error('Unsupported boxscore format. Allowed: xlsx, xls, csv'));
+      return cb(new ClientError('Unsupported boxscore format. Allowed: xlsx, xls, csv'));
     }
     return cb(null, true);
   }
@@ -159,7 +176,7 @@ if (IS_PRODUCTION) app.set('trust proxy', 1);
 app.disable('x-powered-by');
 app.use(express.json({ limit: '100kb' }));
 app.use(express.static(path.join(ROOT_DIR, 'client')));
-app.use('/uploads', express.static(UPLOADS_DIR));
+if (VIDEO_UPLOADS_ENABLED) app.use('/uploads', express.static(UPLOADS_DIR));
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
@@ -172,6 +189,8 @@ function publicPlayer(player) {
 app.get('/api/config', (_req, res) => {
   res.json({
     agentEnabled: isAgentEnabled(),
+    videoUploadsEnabled: VIDEO_UPLOADS_ENABLED,
+    maxPlayers: MAX_PLAYERS,
     model: isAgentEnabled() ? MODEL : null,
     teams: store.teams.map(({ team, league, season }) => ({ team, league, season }))
   });
@@ -180,6 +199,11 @@ app.get('/api/config', (_req, res) => {
 app.get('/api/players', (_req, res) => res.json(store.readPlayers().map(publicPlayer)));
 
 app.post('/api/players', videoUpload.single('highlightVideo'), (req, res) => {
+  if (store.countPlayers() >= MAX_PLAYERS) {
+    return res.status(409).json({
+      error: `The demo database is full (${MAX_PLAYERS} players). It resets to the original teams when the server restarts.`
+    });
+  }
   const record = playerFromForm(req.body || {}, req.file);
   if (!record.firstName || !record.lastName || !record.position) {
     return res.status(400).json({ error: 'firstName, lastName, and position are required.' });
@@ -293,7 +317,7 @@ app.post('/api/agent/reset', (req, res) => {
 app.get('*', (_req, res) => res.sendFile(path.join(ROOT_DIR, 'client', 'index.html')));
 
 app.use((err, _req, res, _next) => {
-  const status = err instanceof multer.MulterError || err.message?.startsWith('Unsupported') ? 400 : 500;
+  const status = err instanceof ClientError ? err.status : err instanceof multer.MulterError ? 400 : 500;
   if (status === 500) console.error(err);
   res.status(status).json({ error: status === 500 ? 'Something went wrong.' : err.message });
 });

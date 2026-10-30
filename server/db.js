@@ -301,6 +301,10 @@ function openDatabase({ dbPath, seedDir }) {
     return row ? rowToPlayer(row) : null;
   }
 
+  function countPlayers() {
+    return db.prepare('SELECT COUNT(*) AS count FROM players').get().count;
+  }
+
   function getRecentGames(playerId, limit = 5) {
     return selectGamesStmt.all(playerId, limit);
   }
@@ -314,11 +318,10 @@ function openDatabase({ dbPath, seedDir }) {
   if (seedDir && fs.existsSync(path.join(seedDir, 'teams.json'))) {
     const seed = loadSeedPlayers(seedDir);
     teams = seed.teams;
-    const { count } = db.prepare('SELECT COUNT(*) AS count FROM players').get();
-    if (count === 0) db.transaction((rows) => rows.forEach(insertPlayer))(seed.players);
+    if (countPlayers() === 0) db.transaction((rows) => rows.forEach(insertPlayer))(seed.players);
   }
 
-  return { db, teams, readPlayers, getPlayer, getRecentGames, insertPlayer, recordGame };
+  return { db, teams, readPlayers, countPlayers, getPlayer, getRecentGames, insertPlayer, recordGame };
 }
 
 module.exports = { openDatabase, parseCsv, mergeGameIntoSeason, toNumberOrNull, slug };

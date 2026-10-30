@@ -16,11 +16,16 @@ const chatLog = document.getElementById('chat-log');
 const chatResults = document.getElementById('chat-results');
 const chatDoneBtn = document.getElementById('chat-done-btn');
 const engineStatus = document.getElementById('engine-status');
+const videoInput = document.getElementById('highlight-video');
+const videoStatus = document.getElementById('video-status');
+
+const VIDEO_DISABLED_MESSAGE = 'For demo only: video uploads are disabled for safety reasons.';
 
 // Identifies this tab's conversation so follow-up questions keep their context.
 const sessionId = crypto.randomUUID();
 
 let agentEnabled = false;
+let videoUploadsEnabled = false;
 let allPlayers = [];
 
 function fmt(value, fallback = '-') {
@@ -134,6 +139,7 @@ async function loadConfig() {
     const res = await fetch('/api/config');
     const config = await res.json();
     agentEnabled = Boolean(config.agentEnabled);
+    videoUploadsEnabled = Boolean(config.videoUploadsEnabled);
     const teams = (config.teams || []).map((t) => t.team).join(', ');
     engineStatus.textContent = agentEnabled
       ? `Search engine: Claude agent (${config.model}). Database: ${teams}.`
@@ -162,6 +168,13 @@ navLinks.forEach((link) => {
   });
 });
 
+// The picker looks normal; when uploads are off, clicking it shows a notice instead of opening.
+videoInput.addEventListener('click', (event) => {
+  if (videoUploadsEnabled) return;
+  event.preventDefault();
+  videoStatus.textContent = VIDEO_DISABLED_MESSAGE;
+});
+
 form.addEventListener('submit', async (event) => {
   event.preventDefault();
   formStatus.textContent = 'Saving...';
@@ -170,6 +183,7 @@ form.addEventListener('submit', async (event) => {
     const payload = await res.json();
     if (!res.ok) throw new Error(payload.error || 'Save failed');
     form.reset();
+    videoStatus.textContent = '';
     formStatus.textContent = `Saved ${payload.firstName} ${payload.lastName}.`;
   } catch (error) {
     formStatus.textContent = error.message;
