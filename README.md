@@ -60,11 +60,11 @@ Understood: positions, men's/women's, NBA/WNBA, team names, points/rebounds/assi
 
 ### Claude agent (optional)
 
-Set both of these to use it:
+If you have your own Anthropic API key, set both of these to use it (no key is included in this repo):
 
 ```bash
 SEARCH_ENGINE=agent
-ANTHROPIC_API_KEY=sk-ant-...
+ANTHROPIC_API_KEY=<your-anthropic-api-key>
 ```
 
 With only one of them set, the app stays on the rule-based search. If an agent request fails, that answer falls back to the rule-based search.
