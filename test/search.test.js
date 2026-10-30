@@ -93,6 +93,59 @@ test('rule chat asks a follow-up for a broad query, then searches', () => {
   assert.equal(second.done, true);
 });
 
+const newSession = () => ({ criteria: {}, askedQuestions: [], awaitingQuestionKey: null });
+
+test('filters carry over between messages until reset', () => {
+  const session = newSession();
+  const first = runRuleChat(session, { message: 'guard with at least 15 points per game' }, players, teams);
+  assert.equal(first.done, true);
+  assert.ok(first.matches.length > 2);
+
+  const second = runRuleChat(session, { message: 'celtics' }, players, teams);
+  assert.equal(second.done, true);
+  assert.deepEqual(names(second.matches), ['Jaylen Brown', 'Derrick White']);
+  assert.match(second.summary, /Filters: Boston Celtics · guard · PPG ≥ 15\./);
+
+  const reset = runRuleChat(session, { message: 'start over' }, players, teams);
+  assert.equal(reset.reset, true);
+  assert.deepEqual(session.criteria, {});
+});
+
+test('a new value replaces the old one, and "any X" removes a filter', () => {
+  const session = newSession();
+  runRuleChat(session, { message: 'celtics guard with 15 points' }, players, teams);
+  runRuleChat(session, { message: '20 points' }, players, teams);
+  assert.equal(session.criteria.minPointsPerGame, 20);
+  const reply = runRuleChat(session, { message: 'any team' }, players, teams);
+  assert.equal(session.criteria.team, undefined);
+  assert.deepEqual(names(reply.matches), ['Shai Gilgeous-Alexander', 'Jaylen Brown', 'Jalen Williams']);
+});
+
+test('"older than 30" is an age filter, and missing ages are reported', () => {
+  const criteria = parseCriteria('male, older than 30, more than 15 points per game', {}, { teams });
+  assert.equal(criteria.minAge, 31);
+  assert.equal(criteria.minPointsPerGame, 15);
+  assert.equal(parseCriteria('younger than 25', {}, { teams }).maxAge, 24);
+  assert.equal(parseCriteria('over 30 minutes', {}, { teams }).minAge, undefined);
+
+  const reply = runRuleChat(newSession(), { message: 'male, older than 30, more than 15 points per game' }, players, teams);
+  assert.equal(reply.matches.length, 0);
+  assert.match(reply.summary, /have no age on record and were left out/);
+});
+
+test('a new filter typed while a question is pending is not taken as the answer', () => {
+  const session = { ...newSession(), awaitingQuestionKey: 'minThreePtPercentage', askedQuestions: ['minThreePtPercentage'] };
+  runRuleChat(session, { message: '8 rebounds' }, players, teams);
+  assert.equal(session.criteria.minReboundsPerGame, 8);
+  assert.equal(session.criteria.minThreePtPercentage, undefined);
+});
+
+test('a bare number still answers the pending question', () => {
+  const session = { ...newSession(), criteria: { league: 'NBA', gender: 'male' }, awaitingQuestionKey: 'minThreePtPercentage', askedQuestions: ['minThreePtPercentage'] };
+  runRuleChat(session, { message: '35' }, players, teams);
+  assert.equal(session.criteria.minThreePtPercentage, 35);
+});
+
 test('agent tool input maps onto the same criteria', () => {
   const criteria = validateSearchInput({ position: 'guard', min_points_per_game: 20, team: 'okc' }, teams);
   assert.equal(criteria.team, 'Oklahoma City Thunder');

@@ -157,7 +157,7 @@ function greet() {
     'bot',
     agentEnabled
       ? 'Ask me about the players in the database, for example: "guard with at least 20 points per game" or "best rebounder in the WNBA".'
-      : 'Describe your target profile, for example: "guard with at least 20 points per game" or "WNBA forward, 8+ rebounds". Reply NA to skip a follow-up question, or click Done to search right away.'
+      : 'Describe your target profile, for example: "guard with at least 20 points per game" or "WNBA forward, 8+ rebounds". Each message adds to your filters, so you can keep narrowing the results ("only Celtics", "35% from three", "any league" to drop one). Reply NA to skip a follow-up question. Click Done to clear everything and start a new search.'
   );
 }
 
@@ -245,6 +245,7 @@ async function sendChat(message, forceSearch = false) {
     }
 
     addMessage('bot', payload.summary);
+    if (payload.reset) chatResults.replaceChildren();
     if (Array.isArray(payload.matches)) {
       if (!payload.matches.length && payload.engine === 'rules') {
         addMessage('bot', 'No matches. Try relaxing one filter, like the points or shooting threshold.');
@@ -268,18 +269,14 @@ chatForm.addEventListener('submit', async (event) => {
   await sendChat(message, false);
 });
 
+// Done (or "New chat" with the agent) clears the conversation and all filters.
 chatDoneBtn.addEventListener('click', async () => {
-  if (agentEnabled) {
-    await fetch('/api/agent/reset', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId })
-    }).catch(() => {});
-    greet();
-    return;
-  }
-  addMessage('user', 'Done');
-  await sendChat('', true);
+  await fetch('/api/agent/reset', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sessionId })
+  }).catch(() => {});
+  greet();
 });
 
 refreshBtn.addEventListener('click', fetchPlayers);

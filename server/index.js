@@ -301,10 +301,12 @@ app.post('/api/agent/chat', asyncRoute(async (req, res) => {
   }
 
   const result = runRuleChat(chat.rules, { message: text, forceSearch }, store.readPlayers(), store.teams);
-  // A follow-up question (done: false) carries no player lists.
-  const response = result.done
-    ? { ...result, matches: result.matches.map(publicPlayer), separateMatches: result.separateMatches.map(publicPlayer) }
-    : result;
+  // Follow-up questions and resets carry no player lists.
+  const response = {
+    ...result,
+    matches: Array.isArray(result.matches) ? result.matches.map(publicPlayer) : null,
+    separateMatches: Array.isArray(result.separateMatches) ? result.separateMatches.map(publicPlayer) : []
+  };
   return res.json(notice ? { ...response, notice } : response);
 }));
 

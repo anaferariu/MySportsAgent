@@ -68,6 +68,30 @@ const TRAIT_SORTS = [
   [/\b(?:ball security|takes care of the ball|low turnovers?)\b/, 'turnovers']
 ];
 
+// Words a user can use to remove a filter -> the criteria keys they clear.
+const FILTER_GROUPS = {
+  position: ['position'],
+  league: ['league'],
+  team: ['team'],
+  gender: ['gender'],
+  age: ['minAge', 'maxAge'],
+  nationality: ['nationality'],
+  country: ['nationality'],
+  height: ['minHeightInches'],
+  points: ['minPointsPerGame'],
+  scoring: ['minPointsPerGame'],
+  rebounds: ['minReboundsPerGame'],
+  assists: ['minAssistsPerGame'],
+  steals: ['minStealsPerGame'],
+  blocks: ['minBlocksPerGame'],
+  turnovers: ['maxTurnoversPerGame'],
+  three: ['minThreePtPercentage', 'minThreeAttemptsPerGame'],
+  '3pt': ['minThreePtPercentage', 'minThreeAttemptsPerGame'],
+  '3 pt': ['minThreePtPercentage', 'minThreeAttemptsPerGame'],
+  games: ['minGamesPlayed'],
+  minutes: ['minMinutesPerGame']
+};
+
 const SOFT_TRAITS = [
   'long', 'athletic', 'quick', 'aggressive', 'switchable', 'high iq', 'high motor', 'catch and shoot', 'on ball', 'off ball'
 ];
@@ -144,8 +168,14 @@ function parseCriteria(message, previousCriteria = {}, context = {}) {
   const criteria = { ...previousCriteria };
   const teams = context.teams || [];
 
-  if (/\b(?:show results|search now|run search|find them|that'?s all|done|go ahead)\b/.test(text)) {
+  if (/\b(?:show results|search now|run search|find them|that'?s all|go ahead)\b/.test(text)) {
     criteria._forceSearch = true;
+  }
+
+  // "any league", "no age limit", "remove the team filter": drop a filter from the running search.
+  const removable = /\b(?:any|no|remove|clear|drop|without)\s+(?:the\s+)?(position|league|team|gender|age|nationality|country|height|points|scoring|rebounds|assists|steals|blocks|turnovers|three|3pt|3 pt|games|minutes)\b/g;
+  for (const [, field] of text.matchAll(removable)) {
+    for (const key of FILTER_GROUPS[field] || []) delete criteria[key];
   }
 
   if (/\b(?:female|women'?s?|woman|girls?|ladies)\b/.test(text)) criteria.gender = 'female';
@@ -243,10 +273,20 @@ function parseCriteria(message, previousCriteria = {}, context = {}) {
     criteria.minAge = Number(ageBetween[1]);
     criteria.maxAge = Number(ageBetween[2]);
   }
-  const maxAge = text.match(/(?:under|younger than|at most|max(?:imum)? age(?: of)?)\s*(\d{1,2})\s*(?:years?|yrs?|yo)\b|age\s*(?:under|below|<)\s*(\d{1,2})/);
-  if (maxAge) criteria.maxAge = Number(maxAge[1] || maxAge[2]);
-  const minAge = text.match(/(?:over|older than|at least)\s*(\d{1,2})\s*(?:years?|yrs?|yo)\b|age\s*(?:over|above|>)\s*(\d{1,2})/);
-  if (minAge) criteria.minAge = Number(minAge[1] || minAge[2]);
+  // "older/younger than N" is unambiguous; bare "over/under N" needs "years" so
+  // it isn't confused with a stat. Strict comparisons are converted to inclusive ages.
+  const maxAge =
+    text.match(/\b(?:younger than|under the age of|age\s*(?:under|below|<))\s*(\d{1,2})\b/) ||
+    text.match(/\bunder\s*(\d{1,2})\s*(?:years?|yrs?|yo)\b/);
+  if (maxAge) criteria.maxAge = Number(maxAge[1]) - 1;
+  const maxAgeInclusive = text.match(/\bat most\s*(\d{1,2})\s*(?:years?|yrs?|yo)\b|\bmax(?:imum)? age(?: of)?\s*(\d{1,2})\b/);
+  if (maxAgeInclusive) criteria.maxAge = Number(maxAgeInclusive[1] || maxAgeInclusive[2]);
+  const minAge =
+    text.match(/\b(?:older than|over the age of|age\s*(?:over|above|>))\s*(\d{1,2})\b/) ||
+    text.match(/\bover\s*(\d{1,2})\s*(?:years?|yrs?|yo)\b/);
+  if (minAge) criteria.minAge = Number(minAge[1]) + 1;
+  const minAgeInclusive = text.match(/\bat least\s*(\d{1,2})\s*(?:years?|yrs?|yo)\b|\baged?\s*(\d{1,2})\s*\+|\bmin(?:imum)? age(?: of)?\s*(\d{1,2})\b/);
+  if (minAgeInclusive) criteria.minAge = Number(minAgeInclusive[1] || minAgeInclusive[2] || minAgeInclusive[3]);
 
   const astTo = text.match(/(?:a\/t|assists?[-\s]*to[-\s]*turnovers?(?:\s*ratio)?)\s*(?:of\s*)?(?:>=|>|above|over|at least|min)?\s*(\d+(?:\.\d+)?)/);
   if (astTo) criteria.minAstToTurnover = Number(astTo[1]);
@@ -393,10 +433,16 @@ function evaluatePlayer(player, criteria) {
 function searchPlayers(players, criteria = {}) {
   const sort = SORT_FIELDS[criteria.sortBy];
   const limit = Math.min(Math.max(Number(criteria.limit) || 25, 1), 100);
+  // Players dropped only because a filtered field is empty (e.g. no birth date), by field.
+  const excludedForMissing = {};
 
   const evaluated = players
     .map((player) => {
       const result = evaluatePlayer(player, criteria);
+      if (!result.pass && result.missing.length && (criteria.unknownDataMode || 'exclude') === 'exclude') {
+        const field = result.missing[result.missing.length - 1];
+        excludedForMissing[field] = (excludedForMissing[field] || 0) + 1;
+      }
       return {
         player: {
           ...player,
@@ -428,8 +474,49 @@ function searchPlayers(players, criteria = {}) {
   return {
     total: matches.length,
     matches: matches.slice(0, limit),
-    separateMatches: separateMatches.slice(0, limit)
+    separateMatches: separateMatches.slice(0, limit),
+    excludedForMissing
   };
+}
+
+function formatHeight(inches) {
+  const feet = Math.floor(inches / 12);
+  return `${feet}'${Math.round(inches - feet * 12)}"`;
+}
+
+// Human-readable list of the active filters, e.g. "male · PPG ≥ 15 · 3PT% ≥ 35".
+function describeCriteria(criteria) {
+  const parts = [];
+  if (criteria.gender) parts.push(criteria.gender);
+  if (criteria.league) parts.push(criteria.league);
+  if (criteria.team) parts.push(criteria.team);
+  if (criteria.position) parts.push(criteria.position);
+  if (criteria.nationality) parts.push(`nationality: ${criteria.nationality}`);
+  if (criteria.handedness) parts.push(`${criteria.handedness}-handed`);
+  if (criteria.playsInNationalTeam) parts.push(`national team: ${criteria.playsInNationalTeam}`);
+
+  for (const [key, [, label, direction]] of Object.entries(THRESHOLDS)) {
+    if (!hasValue(criteria[key])) continue;
+    const value = key === 'minHeightInches' ? formatHeight(criteria[key]) : `${criteria[key]}${label.endsWith('%') ? '%' : ''}`;
+    parts.push(`${label} ${direction === 'min' ? '≥' : '≤'} ${value}`);
+  }
+
+  if (hasValue(criteria.minAge) && hasValue(criteria.maxAge)) parts.push(`age ${criteria.minAge}–${criteria.maxAge}`);
+  else if (hasValue(criteria.minAge)) parts.push(`age ≥ ${criteria.minAge}`);
+  else if (hasValue(criteria.maxAge)) parts.push(`age ≤ ${criteria.maxAge}`);
+  if (hasValue(criteria.minAstToTurnover)) parts.push(`A/T ≥ ${criteria.minAstToTurnover}`);
+  if (Array.isArray(criteria.keywords) && criteria.keywords.length) parts.push(`traits: ${criteria.keywords.join(', ')}`);
+  if (SORT_FIELDS[criteria.sortBy]) parts.push(`ranked by ${SORT_FIELDS[criteria.sortBy].label}`);
+  if (hasValue(criteria.limit)) parts.push(`top ${criteria.limit}`);
+  return parts.join(' · ');
+}
+
+const MISSING_FIELD_NAMES = { playsInNationalTeam: 'national team info', vertical: 'vertical jump', 'A/T': 'assist/turnover data' };
+
+function missingDataNote(excludedForMissing) {
+  return Object.entries(excludedForMissing)
+    .map(([field, count]) => `${count} player(s) have no ${MISSING_FIELD_NAMES[field] || field} on record and were left out.`)
+    .join(' ');
 }
 
 const FOLLOW_UP_QUESTIONS = [
@@ -466,15 +553,33 @@ function determineQuestion(criteria, asked, pool) {
 const FOLLOW_UP_POOL_THRESHOLD = 12;
 const MAX_FOLLOW_UPS = 2;
 
-// One turn of the rule-based assistant. `session` is mutated in place.
+function resetRuleSession(session) {
+  session.criteria = {};
+  session.askedQuestions = [];
+  session.awaitingQuestionKey = null;
+}
+
+const RESET_PATTERN = /^(?:new search|start over|reset|clear(?: all)?(?: filters)?)$/;
+
+// One turn of the rule-based assistant. `session` is mutated in place. Filters
+// accumulate across turns so each message refines the same search; only an
+// explicit reset (the Done button, or "start over") clears them.
 function runRuleChat(session, { message = '', forceSearch = false }, players, teams) {
+  if (RESET_PATTERN.test(normalizeQuery(message))) {
+    resetRuleSession(session);
+    return { done: true, engine: 'rules', reset: true, summary: 'Filters cleared. Describe the player you are looking for.', matches: null, separateMatches: [] };
+  }
+
   const awaiting = session.awaitingQuestionKey;
   session.awaitingQuestionKey = null;
+  const before = JSON.stringify(session.criteria);
   session.criteria = parseCriteria(message, session.criteria, { teams });
-  applyDirectAnswerToQuestion(message, awaiting, session.criteria);
-
   const force = Boolean(forceSearch || session.criteria._forceSearch);
   delete session.criteria._forceSearch;
+
+  // Treat the message as the answer to a pending question only if it didn't set
+  // filters of its own; "8 rebounds" after "Minimum 3PT%?" is a new filter, not 8%.
+  if (JSON.stringify(session.criteria) === before) applyDirectAnswerToQuestion(message, awaiting, session.criteria);
 
   const pool = searchPlayers(players, { ...session.criteria, limit: 100 });
   const question =
@@ -489,15 +594,20 @@ function runRuleChat(session, { message = '', forceSearch = false }, players, te
   }
 
   const result = searchPlayers(players, session.criteria);
-  const criteriaUsed = session.criteria;
-  session.criteria = {};
-  session.askedQuestions = [];
+  const filters = describeCriteria(session.criteria);
+  const summary = [
+    `Found ${result.total} matching player(s)${result.total > result.matches.length ? `, showing the top ${result.matches.length}` : ''}.`,
+    filters ? `Filters: ${filters}.` : 'No filters yet: showing everyone.',
+    missingDataNote(result.excludedForMissing)
+  ]
+    .filter(Boolean)
+    .join(' ');
 
   return {
     done: true,
     engine: 'rules',
-    summary: `Found ${result.total} matching player(s)${result.total > result.matches.length ? `, showing the top ${result.matches.length}` : ''}.`,
-    criteriaUsed,
+    summary,
+    criteriaUsed: { ...session.criteria },
     matches: result.matches,
     separateMatches: result.separateMatches
   };
@@ -510,6 +620,8 @@ module.exports = {
   parseCriteria,
   parseHeightToInches,
   searchPlayers,
+  describeCriteria,
   runRuleChat,
+  resetRuleSession,
   calculateAgeFromDob
 };
