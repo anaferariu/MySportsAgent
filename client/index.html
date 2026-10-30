@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MySportsAgent</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="background-glow"></div>
+
+    <section id="view-login" class="page-view active">
+      <main class="home-wrap">
+        <section class="panel home-panel">
+          <h1>Login to MySportsAgent</h1>
+          <p class="subtitle">Enter your credentials to access ScoutBoard, Player Database, and AI Assistant.</p>
+
+          <form id="login-form" class="login-form">
+            <label>
+              Username
+              <input id="login-username" name="username" required autocomplete="username" />
+            </label>
+            <label>
+              Password
+              <input id="login-password" name="password" type="password" required autocomplete="current-password" />
+            </label>
+            <button type="submit">Login</button>
+            <p id="login-status" class="status"></p>
+          </form>
+        </section>
+      </main>
+    </section>
+
+    <section id="view-home" class="page-view">
+      <main class="home-wrap">
+        <section class="panel home-panel">
+          <div class="view-header">
+            <h1>Welcome to MySportsAgent!</h1>
+            <button type="button" class="text-btn" data-logout>Logout</button>
+          </div>
+          <p class="subtitle">Choose where you want to go:</p>
+
+          <div class="home-links">
+            <a href="#" class="home-link" data-target="view-scoutboard">1) ScoutBoard - Add your new player</a>
+            <a href="#" class="home-link" data-target="view-player-database">2) Player Database</a>
+            <a href="#" class="home-link" data-target="view-ai-assistant">3) AI Scout Assistant</a>
+          </div>
+        </section>
+      </main>
+    </section>
+
+    <section id="view-scoutboard" class="page-view">
+      <main class="single-view-wrap">
+        <section class="panel intake-panel">
+          <div class="view-header">
+            <h2>ScoutBoard</h2>
+            <div class="header-actions">
+              <a href="#" class="top-link" data-target="view-home">Back to Home</a>
+              <button type="button" class="text-btn" data-logout>Logout</button>
+            </div>
+          </div>
+          <p class="subtitle">Add a new player profile</p>
+
+          <form id="player-form" enctype="multipart/form-data">
+            <div class="grid two">
+              <label>
+                First Name *
+                <input name="firstName" required />
+              </label>
+              <label>
+                Last Name *
+                <input name="lastName" required />
+              </label>
+            </div>
+
+            <div class="grid four">
+              <label>
+                Gender
+                <select name="gender">
+                  <option value="">Any</option>
+                  <option value="female">Female</option>
+                  <option value="male">Male</option>
+                </select>
+              </label>
+              <label>
+                DOB
+                <input name="dob" type="date" />
+              </label>
+              <label>
+                Height
+                <input name="heightDisplay" placeholder="e.g. 6'2&quot;" />
+              </label>
+              <label>
+                Weight
+                <input name="weightDisplay" placeholder="e.g. 180 lbs" />
+              </label>
+            </div>
+
+            <div class="grid two">
+              <label>
+                Nationality
+                <input name="nationality" placeholder="e.g. USA, Spain, Nigeria" />
+              </label>
+              <label>
+                Plays in National Team
+                <select name="playsInNationalTeam">
+                  <option value="">Unknown</option>
+                  <option value="yes">Yes</option>
+                  <option value="no">No</option>
+                </select>
+              </label>
+            </div>
+
+            <div class="grid two">
+              <label>
+                Position *
+                <input name="position" required placeholder="e.g. Shooting Guard" />
+              </label>
+              <label>
+                Handedness
+                <select name="handedness">
+                  <option value="">Unknown</option>
+                  <option value="left">Left</option>
+                  <option value="right">Right</option>
+                  <option value="ambidextrous">Ambidextrous</option>
+                </select>
+              </label>
+            </div>
+
+            <div class="grid three">
+              <label>
+                Team
+                <input name="team" placeholder="e.g. CB Gran Canaria" />
+              </label>
+              <label>
+                League
+                <input name="league" placeholder="e.g. Liga ACB" />
+              </label>
+              <label>
+                Season
+                <input name="season" placeholder="e.g. 2025-26" />
+              </label>
+            </div>
+
+            <p class="subtitle">Season averages (per game)</p>
+
+            <div class="grid four">
+              <label>
+                Games Played
+                <input name="gamesPlayed" type="number" min="0" max="200" step="1" placeholder="30" />
+              </label>
+              <label>
+                MIN
+                <input name="minutesPerGame" type="number" min="0" max="60" step="0.1" placeholder="28.5" />
+              </label>
+              <label>
+                PPG
+                <input name="pointsPerGame" type="number" min="0" max="80" step="0.1" placeholder="14.2" />
+              </label>
+              <label>
+                RPG
+                <input name="reboundsPerGame" type="number" min="0" max="30" step="0.1" placeholder="6.1" />
+              </label>
+            </div>
+
+            <div class="grid four">
+              <label>
+                APG
+                <input name="assistsPerGame" type="number" min="0" max="30" step="0.1" placeholder="5.4" />
+              </label>
+              <label>
+                SPG
+                <input name="stealsPerGame" type="number" min="0" max="10" step="0.1" placeholder="1.8" />
+              </label>
+              <label>
+                BPG
+                <input name="blocksPerGame" type="number" min="0" max="10" step="0.1" placeholder="0.6" />
+              </label>
+              <label>
+                TOV
+                <input name="turnoversPerGame" type="number" min="0" max="15" step="0.1" placeholder="2.1" />
+              </label>
+            </div>
+
+            <div class="grid four">
+              <label>
+                FG%
+                <input name="fgPercentage" type="number" min="0" max="100" step="0.1" placeholder="47.3" />
+              </label>
+              <label>
+                3PT%
+                <input name="threePtPercentage" type="number" min="0" max="100" step="0.1" placeholder="40.0" />
+              </label>
+              <label>
+                FT%
+                <input name="ftPercentage" type="number" min="0" max="100" step="0.1" placeholder="82.5" />
+              </label>
+              <label>
+                Vertical (inches)
+                <input name="verticalInches" type="number" min="0" max="80" step="0.1" placeholder="31" />
+              </label>
+            </div>
+
+            <label>
+              Keywords / Traits
+              <input
+                name="keywords"
+                placeholder="e.g. long guard, quick, aggressive on defense, athletic"
+              />
+            </label>
+
+            <label>
+              Notes
+              <textarea name="notes" rows="3" placeholder="Additional player characteristics"></textarea>
+            </label>
+
+            <label>
+              Highlight Video (mp4, mov, avi, mpg, mpeg, mkv, webm)
+              <input name="highlightVideo" type="file" accept=".mp4,.mov,.avi,.mpg,.mpeg,.mkv,.webm" />
+            </label>
+
+            <button type="submit">Save Player</button>
+            <p id="form-status" class="status"></p>
+          </form>
+        </section>
+      </main>
+    </section>
+
+    <section id="view-player-database" class="page-view">
+      <main class="single-view-wrap">
+        <section class="panel table-panel">
+          <div class="view-header">
+            <h2>Player Database (SQLite-backed)</h2>
+            <div class="header-actions">
+              <a href="#" class="top-link" data-target="view-home">Back to Home</a>
+              <button type="button" class="text-btn" data-logout>Logout</button>
+            </div>
+          </div>
+          <div class="table-header">
+            <p class="subtitle">Season averages per game. Sorted by points.</p>
+            <button id="refresh-btn">Refresh</button>
+          </div>
+          <form id="boxscore-form" class="boxscore-form" enctype="multipart/form-data">
+            <label>
+              Upload a game boxscore (xlsx/csv). Each row is added to that player's season averages.
+              <input id="boxscore-file" name="boxscoreFile" type="file" accept=".xlsx,.xls,.csv" required />
+            </label>
+            <button type="submit">Update Stats</button>
+          </form>
+          <p id="boxscore-status" class="status"></p>
+          <label>
+            Filter
+            <input id="players-filter" placeholder="Type a name, team, league or position" />
+          </label>
+          <p id="players-count" class="status"></p>
+          <div class="table-wrap">
+            <table id="players-table"></table>
+          </div>
+        </section>
+      </main>
+    </section>
+
+    <section id="view-ai-assistant" class="page-view">
+      <main class="single-view-wrap">
+        <section class="panel search-panel">
+          <div class="view-header">
+            <h2>AI Scout Assistant</h2>
+            <div class="header-actions">
+              <a href="#" class="top-link" data-target="view-home">Back to Home</a>
+              <button type="button" class="text-btn" data-logout>Logout</button>
+            </div>
+          </div>
+          <p class="subtitle">Describe the player you are looking for</p>
+          <p id="engine-status" class="engine-status"></p>
+
+          <div id="chat-log" class="chat-log"></div>
+
+          <form id="chat-form" class="chat-form">
+            <input id="chat-input" maxlength="2000" placeholder="Guard with at least 20 points per game" />
+            <button type="submit">Send</button>
+            <button id="chat-done-btn" type="button" class="secondary-btn">Done</button>
+          </form>
+
+          <div id="chat-results"></div>
+        </section>
+      </main>
+    </section>
+
+    <script src="/script.js"></script>
+  </body>
+</html>

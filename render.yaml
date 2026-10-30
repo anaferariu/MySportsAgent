@@ -1,0 +1,25 @@
+# Render Blueprint. The free plan has no persistent disk, so the SQLite database
+# is rebuilt from data/seed on every deploy or restart; uploads are temporary.
+services:
+  - type: web
+    name: mysportsagent
+    runtime: node
+    plan: free
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "22"
+      - key: AUTH_USERNAME
+        value: admin
+      - key: AUTH_PASSWORD
+        generateValue: true
+      # "rules" (default) or "agent". The agent also needs ANTHROPIC_API_KEY.
+      - key: SEARCH_ENGINE
+        value: rules
+      # Optional. Set it in the Render dashboard if you switch to the agent.
+      - key: ANTHROPIC_API_KEY
+        sync: false

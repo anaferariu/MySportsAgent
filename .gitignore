@@ -1,0 +1,12 @@
+node_modules/
+.env
+
+# Runtime data: the database is rebuilt from data/seed on start.
+data/*.db
+data/*.db-*
+data/uploads/
+
+# macOS / iCloud artifacts
+.DS_Store
+* 2
+* 2.*

@@ -1,0 +1,47 @@
+[
+  {
+    "file": "okc-thunder-2024-25.csv",
+    "team": "Oklahoma City Thunder",
+    "aliases": ["thunder", "okc", "oklahoma city", "oklahoma"],
+    "league": "NBA",
+    "season": "2024-25",
+    "gender": "male",
+    "source": "https://www.espn.com/nba/team/stats/_/name/okc/season/2025/seasontype/2"
+  },
+  {
+    "file": "ind-pacers-2024-25.csv",
+    "team": "Indiana Pacers",
+    "aliases": ["pacers", "indiana"],
+    "league": "NBA",
+    "season": "2024-25",
+    "gender": "male",
+    "source": "https://www.espn.com/nba/team/stats/_/name/ind/season/2025/seasontype/2"
+  },
+  {
+    "file": "bos-celtics-2024-25.csv",
+    "team": "Boston Celtics",
+    "aliases": ["celtics", "boston"],
+    "league": "NBA",
+    "season": "2024-25",
+    "gender": "male",
+    "source": "https://www.espn.com/nba/team/stats/_/name/bos/season/2025/seasontype/2"
+  },
+  {
+    "file": "lv-aces-2025.csv",
+    "team": "Las Vegas Aces",
+    "aliases": ["aces", "las vegas", "vegas"],
+    "league": "WNBA",
+    "season": "2025",
+    "gender": "female",
+    "source": "https://www.espn.com/wnba/team/stats/_/name/lv/season/2025/seasontype/2"
+  },
+  {
+    "file": "phx-mercury-2025.csv",
+    "team": "Phoenix Mercury",
+    "aliases": ["mercury", "phoenix"],
+    "league": "WNBA",
+    "season": "2025",
+    "gender": "female",
+    "source": "https://www.espn.com/wnba/team/stats/_/name/phx/season/2025/seasontype/2"
+  }
+]
