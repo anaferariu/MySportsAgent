@@ -13,11 +13,8 @@ services:
         value: production
       - key: NODE_VERSION
         value: "22"
-      - key: AUTH_USERNAME
-        value: admin
-      - key: AUTH_PASSWORD
-        generateValue: true
       # "rules" (default) or "agent". The agent also needs ANTHROPIC_API_KEY.
+      # The site has no login, so with the agent on, every visitor's search is billed to that key.
       - key: SEARCH_ENGINE
         value: rules
       # Optional. Set it in the Render dashboard if you switch to the agent.

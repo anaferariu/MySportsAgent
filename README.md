@@ -33,11 +33,10 @@ Requires Node.js 20 or newer.
 
 ```bash
 npm install
-cp .env.example .env   # then set AUTH_PASSWORD
-node --env-file=.env server/index.js
+npm start
 ```
 
-Open http://localhost:3000 and log in with `AUTH_USERNAME` / `AUTH_PASSWORD` (defaults: `admin` / `changeme`, allowed locally only).
+Open http://localhost:3000. There is no login: the app is meant to be a public demo. To change settings, copy `.env.example` to `.env` and start with `node --env-file=.env server/index.js`.
 
 The SQLite database (`data/players.db`) is created on first start from the seed files. Delete it to reset.
 
@@ -70,6 +69,8 @@ ANTHROPIC_API_KEY=sk-ant-...
 
 With only one of them set, the app stays on the rule-based search. If an agent request fails, that answer falls back to the rule-based search.
 
+The app has no login, so with the agent on, every visitor's search is billed to your API key. Set a monthly spend limit in the Anthropic Console before enabling it on a public deployment.
+
 The agent ([`server/agent.js`](server/agent.js)) uses `claude-opus-5-5` (override with `ANTHROPIC_MODEL`). It does not receive the database. It gets:
 
 - a system prompt listing the teams and which fields exist,
@@ -80,18 +81,14 @@ Claude turns the request into filters and explains the results; the result table
 
 ## Deploy on Render
 
-[`render.yaml`](render.yaml) is a Render Blueprint: in Render, choose **New → Blueprint** and select this repository. It generates a random `AUTH_PASSWORD` (see the service's Environment tab) and keeps `SEARCH_ENGINE=rules`.
+[`render.yaml`](render.yaml) is a Render Blueprint: in Render, choose **New → Blueprint** and select this repository. It uses the free plan and keeps `SEARCH_ENGINE=rules`.
 
-The free plan has no persistent disk, so the database is rebuilt from the seed files on every deploy or restart. Players you add, boxscores you upload and videos are temporary. For persistence, use a paid plan with a disk mounted and point `DATA_DIR` at it.
-
-In production (`NODE_ENV=production`) the server refuses to start with the default password, and session cookies are marked `Secure`.
+The free plan has no persistent disk, so the database is rebuilt from the seed files on every deploy or restart. Players and boxscores that visitors add, and uploaded videos, are temporary; anything that should last belongs in `data/seed/`. For persistence, use a paid plan with a disk mounted and point `DATA_DIR` at it.
 
 ## Configuration
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `AUTH_USERNAME` | `admin` | Login username |
-| `AUTH_PASSWORD` | `changeme` | Login password (required in production) |
 | `SEARCH_ENGINE` | `rules` | `rules` or `agent` |
 | `ANTHROPIC_API_KEY` | | Needed for `SEARCH_ENGINE=agent` |
 | `ANTHROPIC_MODEL` | `claude-opus-5-5` | Model for the agent |
@@ -106,7 +103,6 @@ server/
   db.js       SQLite schema, seeding, boxscore merge
   search.js   Rule-based parser and the shared filter/ranking engine
   agent.js    Optional Claude agent (tool use over search.js)
-  auth.js     Single-user login with session cookies
 client/       Static HTML/CSS/JS frontend
 data/seed/    Team CSVs + teams.json (committed)
 data/samples/ Example boxscore for the upload feature

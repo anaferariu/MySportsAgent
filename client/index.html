@@ -15,34 +15,11 @@
   <body>
     <div class="background-glow"></div>
 
-    <section id="view-login" class="page-view active">
-      <main class="home-wrap">
-        <section class="panel home-panel">
-          <h1>Login to MySportsAgent</h1>
-          <p class="subtitle">Enter your credentials to access ScoutBoard, Player Database, and AI Assistant.</p>
-
-          <form id="login-form" class="login-form">
-            <label>
-              Username
-              <input id="login-username" name="username" required autocomplete="username" />
-            </label>
-            <label>
-              Password
-              <input id="login-password" name="password" type="password" required autocomplete="current-password" />
-            </label>
-            <button type="submit">Login</button>
-            <p id="login-status" class="status"></p>
-          </form>
-        </section>
-      </main>
-    </section>
-
-    <section id="view-home" class="page-view">
+    <section id="view-home" class="page-view active">
       <main class="home-wrap">
         <section class="panel home-panel">
           <div class="view-header">
             <h1>Welcome to MySportsAgent!</h1>
-            <button type="button" class="text-btn" data-logout>Logout</button>
           </div>
           <p class="subtitle">Choose where you want to go:</p>
 
@@ -61,9 +38,7 @@
           <div class="view-header">
             <h2>ScoutBoard</h2>
             <div class="header-actions">
-              <a href="#" class="top-link" data-target="view-home">Back to Home</a>
-              <button type="button" class="text-btn" data-logout>Logout</button>
-            </div>
+              <a href="#" class="top-link" data-target="view-home">Back to Home</a>            </div>
           </div>
           <p class="subtitle">Add a new player profile</p>
 
@@ -238,9 +213,7 @@
           <div class="view-header">
             <h2>Player Database (SQLite-backed)</h2>
             <div class="header-actions">
-              <a href="#" class="top-link" data-target="view-home">Back to Home</a>
-              <button type="button" class="text-btn" data-logout>Logout</button>
-            </div>
+              <a href="#" class="top-link" data-target="view-home">Back to Home</a>            </div>
           </div>
           <div class="table-header">
             <p class="subtitle">Season averages per game. Sorted by points.</p>
@@ -272,9 +245,7 @@
           <div class="view-header">
             <h2>AI Scout Assistant</h2>
             <div class="header-actions">
-              <a href="#" class="top-link" data-target="view-home">Back to Home</a>
-              <button type="button" class="text-btn" data-logout>Logout</button>
-            </div>
+              <a href="#" class="top-link" data-target="view-home">Back to Home</a>            </div>
           </div>
           <p class="subtitle">Describe the player you are looking for</p>
           <p id="engine-status" class="engine-status"></p>

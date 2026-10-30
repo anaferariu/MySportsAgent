@@ -5,8 +5,7 @@ const fs = require('fs');
 const XLSX = require('xlsx');
 
 const { openDatabase, toNumberOrNull, slug } = require('./db');
-const { createAuth, DEFAULT_PASSWORD } = require('./auth');
-const { runRuleChat, normalizeEntity, parseHeightToInches } = require('./search');
+const { runRuleChat, normalizeEntity, parseHeightToInches, calculateAgeFromDob } = require('./search');
 const { isAgentEnabled, isAgentRequested, hasCredential, runAgentChat, MODEL } = require('./agent');
 
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
@@ -17,18 +16,9 @@ const SEED_DIR = path.join(ROOT_DIR, 'data', 'seed');
 const UPLOADS_DIR = path.join(DATA_DIR, 'uploads');
 const DB_PATH = path.join(DATA_DIR, 'players.db');
 
-const AUTH_USERNAME = process.env.AUTH_USERNAME || 'admin';
-const AUTH_PASSWORD = process.env.AUTH_PASSWORD || DEFAULT_PASSWORD;
-
-if (IS_PRODUCTION && AUTH_PASSWORD === DEFAULT_PASSWORD) {
-  console.error('Refusing to start: set AUTH_PASSWORD to something other than the default in production.');
-  process.exit(1);
-}
-
 fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
 const store = openDatabase({ dbPath: DB_PATH, seedDir: SEED_DIR });
-const auth = createAuth({ username: AUTH_USERNAME, password: AUTH_PASSWORD, secureCookies: IS_PRODUCTION });
 
 const VIDEO_EXTENSIONS = new Set(['.mp4', '.mov', '.avi', '.mpg', '.mpeg', '.mkv', '.webm']);
 const BOXSCORE_EXTENSIONS = new Set(['.xlsx', '.xls', '.csv']);
@@ -38,7 +28,7 @@ const videoUpload = multer({
     destination: (_req, _file, cb) => cb(null, UPLOADS_DIR),
     filename: (_req, file, cb) => cb(null, `${Date.now()}-${file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_')}`)
   }),
-  limits: { fileSize: 100 * 1024 * 1024 },
+  limits: { fileSize: 25 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     if (!VIDEO_EXTENSIONS.has(path.extname(file.originalname).toLowerCase())) {
       return cb(new Error('Unsupported video format. Allowed: mp4, mov, avi, mpg, mpeg, mkv, webm'));
@@ -169,30 +159,36 @@ if (IS_PRODUCTION) app.set('trust proxy', 1);
 app.disable('x-powered-by');
 app.use(express.json({ limit: '100kb' }));
 app.use(express.static(path.join(ROOT_DIR, 'client')));
-app.use('/uploads', auth.requireAuth, express.static(UPLOADS_DIR));
+app.use('/uploads', express.static(UPLOADS_DIR));
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
-app.post('/api/auth/login', auth.login);
-app.post('/api/auth/logout', auth.requireAuth, auth.logout);
-app.get('/api/auth/me', auth.me);
+// The API is public, so responses carry age instead of a full date of birth.
+function publicPlayer(player) {
+  const { dob, ...rest } = player;
+  return { ...rest, age: calculateAgeFromDob(dob) };
+}
 
-app.get('/api/config', auth.requireAuth, (_req, res) => {
-  res.json({ agentEnabled: isAgentEnabled(), model: isAgentEnabled() ? MODEL : null, teams: store.teams.map(({ team, league, season }) => ({ team, league, season })) });
+app.get('/api/config', (_req, res) => {
+  res.json({
+    agentEnabled: isAgentEnabled(),
+    model: isAgentEnabled() ? MODEL : null,
+    teams: store.teams.map(({ team, league, season }) => ({ team, league, season }))
+  });
 });
 
-app.get('/api/players', auth.requireAuth, (_req, res) => res.json(store.readPlayers()));
+app.get('/api/players', (_req, res) => res.json(store.readPlayers().map(publicPlayer)));
 
-app.post('/api/players', auth.requireAuth, videoUpload.single('highlightVideo'), (req, res) => {
+app.post('/api/players', videoUpload.single('highlightVideo'), (req, res) => {
   const record = playerFromForm(req.body || {}, req.file);
   if (!record.firstName || !record.lastName || !record.position) {
     return res.status(400).json({ error: 'firstName, lastName, and position are required.' });
   }
   store.insertPlayer(record);
-  return res.status(201).json(store.getPlayer(record.id));
+  return res.status(201).json(publicPlayer(store.getPlayer(record.id)));
 });
 
-app.post('/api/boxscores/upload', auth.requireAuth, boxscoreUpload.single('boxscoreFile'), (req, res) => {
+app.post('/api/boxscores/upload', boxscoreUpload.single('boxscoreFile'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'boxscoreFile is required.' });
 
   let rows;
@@ -238,26 +234,42 @@ app.post('/api/boxscores/upload', auth.requireAuth, boxscoreUpload.single('boxsc
   return res.json({ ok: true, sourceFile: req.file.originalname, totalRows: rows.length, matchedRows: updated, unmatchedRows: unmatched.length, unmatched });
 });
 
+// Chat state per visitor, keyed by a random id the browser generates. Capped so
+// traffic can't grow memory without bound (oldest conversation is dropped first).
+const MAX_CHAT_SESSIONS = 2000;
 const chatSessions = new Map();
 
-function chatStateFor(token) {
-  if (!chatSessions.has(token)) {
-    chatSessions.set(token, { rules: { criteria: {}, askedQuestions: [], awaitingQuestionKey: null }, agent: { messages: [] } });
-  }
-  return chatSessions.get(token);
+function chatKey(req) {
+  const id = String((req.body && req.body.sessionId) || '');
+  return /^[A-Za-z0-9-]{8,64}$/.test(id) ? id : null;
 }
 
-app.post('/api/agent/chat', auth.requireAuth, async (req, res) => {
+function chatStateFor(key) {
+  if (!chatSessions.has(key)) {
+    if (chatSessions.size >= MAX_CHAT_SESSIONS) chatSessions.delete(chatSessions.keys().next().value);
+    chatSessions.set(key, { rules: { criteria: {}, askedQuestions: [], awaitingQuestionKey: null }, agent: { messages: [] } });
+  }
+  return chatSessions.get(key);
+}
+
+// Express 4 does not catch rejected promises; without this an error in an async
+// route would crash the whole process instead of returning a 500.
+const asyncRoute = (handler) => (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next);
+
+app.post('/api/agent/chat', asyncRoute(async (req, res) => {
   const { message = '', forceSearch = false } = req.body || {};
   const text = String(message).slice(0, 2000).trim();
   if (!text && !forceSearch) return res.status(400).json({ error: 'Message is required.' });
 
-  const chat = chatStateFor(req.auth.token);
+  const key = chatKey(req);
+  if (!key) return res.status(400).json({ error: 'sessionId is required.' });
+  const chat = chatStateFor(key);
   let notice = null;
 
   if (isAgentEnabled() && text) {
     try {
-      return res.json(await runAgentChat(chat.agent, text, store));
+      const reply = await runAgentChat(chat.agent, text, store);
+      return res.json({ ...reply, matches: reply.matches ? reply.matches.map(publicPlayer) : null });
     } catch (error) {
       console.error('Agent request failed, falling back to rule-based search:', error.message);
       notice = 'The AI agent is unavailable right now, so this answer comes from the rule-based search.';
@@ -265,11 +277,16 @@ app.post('/api/agent/chat', auth.requireAuth, async (req, res) => {
   }
 
   const result = runRuleChat(chat.rules, { message: text, forceSearch }, store.readPlayers(), store.teams);
-  return res.json(notice ? { ...result, notice } : result);
-});
+  // A follow-up question (done: false) carries no player lists.
+  const response = result.done
+    ? { ...result, matches: result.matches.map(publicPlayer), separateMatches: result.separateMatches.map(publicPlayer) }
+    : result;
+  return res.json(notice ? { ...response, notice } : response);
+}));
 
-app.post('/api/agent/reset', auth.requireAuth, (req, res) => {
-  chatSessions.delete(req.auth.token);
+app.post('/api/agent/reset', (req, res) => {
+  const key = chatKey(req);
+  if (key) chatSessions.delete(key);
   res.json({ ok: true });
 });
 

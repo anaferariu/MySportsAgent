@@ -7,10 +7,6 @@ const refreshBtn = document.getElementById('refresh-btn');
 const boxscoreForm = document.getElementById('boxscore-form');
 const boxscoreStatus = document.getElementById('boxscore-status');
 
-const loginForm = document.getElementById('login-form');
-const loginStatus = document.getElementById('login-status');
-const logoutButtons = document.querySelectorAll('[data-logout]');
-
 const pageViews = document.querySelectorAll('.page-view');
 const navLinks = document.querySelectorAll('[data-target]');
 
@@ -21,23 +17,14 @@ const chatResults = document.getElementById('chat-results');
 const chatDoneBtn = document.getElementById('chat-done-btn');
 const engineStatus = document.getElementById('engine-status');
 
-let isAuthenticated = false;
+// Identifies this tab's conversation so follow-up questions keep their context.
+const sessionId = crypto.randomUUID();
+
 let agentEnabled = false;
-let pendingChatRequest = null;
 let allPlayers = [];
 
 function fmt(value, fallback = '-') {
   return value === '' || value === null || value === undefined ? fallback : String(value);
-}
-
-function ageFromDob(dob) {
-  if (!dob) return null;
-  const date = new Date(dob);
-  if (Number.isNaN(date.getTime())) return null;
-  const now = new Date();
-  let age = now.getFullYear() - date.getFullYear();
-  if (now.getMonth() < date.getMonth() || (now.getMonth() === date.getMonth() && now.getDate() < date.getDate())) age -= 1;
-  return age;
 }
 
 function videoLink(player) {
@@ -75,7 +62,7 @@ const DATABASE_COLUMNS = [
   ['Gender', (p) => p.gender],
   ['Ht', (p) => p.heightDisplay],
   ['Nationality', (p) => p.nationality],
-  ['Age', (p) => ageFromDob(p.dob)],
+  ['Age', (p) => p.age],
   ['Traits', (p) => p.keywords],
   ['Notes', (p) => p.notes],
   ['Video', videoLink]
@@ -108,19 +95,8 @@ function renderTable(table, columns, rows) {
 }
 
 function showView(viewId) {
-  const nextView = !isAuthenticated && viewId !== 'view-login' ? 'view-login' : viewId;
-  pageViews.forEach((view) => view.classList.toggle('active', view.id === nextView));
-  if (nextView === 'view-player-database' && isAuthenticated) fetchPlayers();
-}
-
-async function apiFetch(url, options = {}) {
-  const response = await fetch(url, options);
-  if (response.status === 401) {
-    isAuthenticated = false;
-    showView('view-login');
-    throw new Error('Please log in to continue.');
-  }
-  return response;
+  pageViews.forEach((view) => view.classList.toggle('active', view.id === viewId));
+  if (viewId === 'view-player-database') fetchPlayers();
 }
 
 function addMessage(role, text) {
@@ -144,7 +120,8 @@ function renderPlayers() {
 
 async function fetchPlayers() {
   try {
-    const res = await apiFetch('/api/players');
+    const res = await fetch('/api/players');
+    if (!res.ok) throw new Error('Could not load players.');
     allPlayers = await res.json();
     renderPlayers();
   } catch (error) {
@@ -154,7 +131,7 @@ async function fetchPlayers() {
 
 async function loadConfig() {
   try {
-    const res = await apiFetch('/api/config');
+    const res = await fetch('/api/config');
     const config = await res.json();
     agentEnabled = Boolean(config.agentEnabled);
     const teams = (config.teams || []).map((t) => t.team).join(', ');
@@ -178,11 +155,6 @@ function greet() {
   );
 }
 
-async function onAuthenticated() {
-  await loadConfig();
-  greet();
-}
-
 navLinks.forEach((link) => {
   link.addEventListener('click', (event) => {
     event.preventDefault();
@@ -190,53 +162,11 @@ navLinks.forEach((link) => {
   });
 });
 
-loginForm.addEventListener('submit', async (event) => {
-  event.preventDefault();
-  loginStatus.textContent = 'Logging in...';
-
-  try {
-    const data = new FormData(loginForm);
-    const res = await fetch('/api/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: String(data.get('username') || '').trim(), password: String(data.get('password') || '') })
-    });
-    const payload = await res.json();
-    if (!res.ok) throw new Error(payload.error || 'Login failed');
-
-    isAuthenticated = true;
-    loginForm.reset();
-    loginStatus.textContent = '';
-    await onAuthenticated();
-    showView('view-home');
-    if (pendingChatRequest) {
-      const { message, forceSearch } = pendingChatRequest;
-      pendingChatRequest = null;
-      addMessage('bot', 'Resuming your previous scout request.');
-      await sendChat(message, forceSearch);
-    }
-  } catch (error) {
-    loginStatus.textContent = error.message;
-  }
-});
-
-logoutButtons.forEach((btn) => {
-  btn.addEventListener('click', async () => {
-    try {
-      await fetch('/api/auth/logout', { method: 'POST' });
-    } catch (_error) {
-      // Still clear local state.
-    }
-    isAuthenticated = false;
-    showView('view-login');
-  });
-});
-
 form.addEventListener('submit', async (event) => {
   event.preventDefault();
   formStatus.textContent = 'Saving...';
   try {
-    const res = await apiFetch('/api/players', { method: 'POST', body: new FormData(form) });
+    const res = await fetch('/api/players', { method: 'POST', body: new FormData(form) });
     const payload = await res.json();
     if (!res.ok) throw new Error(payload.error || 'Save failed');
     form.reset();
@@ -250,7 +180,7 @@ boxscoreForm.addEventListener('submit', async (event) => {
   event.preventDefault();
   boxscoreStatus.textContent = 'Processing boxscore...';
   try {
-    const res = await apiFetch('/api/boxscores/upload', { method: 'POST', body: new FormData(boxscoreForm) });
+    const res = await fetch('/api/boxscores/upload', { method: 'POST', body: new FormData(boxscoreForm) });
     const payload = await res.json();
     if (!res.ok) throw new Error(payload.error || 'Boxscore upload failed');
     boxscoreForm.reset();
@@ -285,10 +215,10 @@ function renderResults(payload) {
 async function sendChat(message, forceSearch = false) {
   chatInput.disabled = true;
   try {
-    const res = await apiFetch('/api/agent/chat', {
+    const res = await fetch('/api/agent/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message, forceSearch })
+      body: JSON.stringify({ sessionId, message, forceSearch })
     });
     const payload = await res.json();
     if (!res.ok) throw new Error(payload.error || 'Search request failed');
@@ -308,11 +238,6 @@ async function sendChat(message, forceSearch = false) {
       renderResults(payload);
     }
   } catch (error) {
-    if (error.message === 'Please log in to continue.') {
-      pendingChatRequest = { message, forceSearch };
-      addMessage('bot', 'Please log in. I will resume your last request automatically.');
-      return;
-    }
     addMessage('bot', error.message);
   } finally {
     chatInput.disabled = false;
@@ -331,7 +256,11 @@ chatForm.addEventListener('submit', async (event) => {
 
 chatDoneBtn.addEventListener('click', async () => {
   if (agentEnabled) {
-    await apiFetch('/api/agent/reset', { method: 'POST' }).catch(() => {});
+    await fetch('/api/agent/reset', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId })
+    }).catch(() => {});
     greet();
     return;
   }
@@ -342,13 +271,7 @@ chatDoneBtn.addEventListener('click', async () => {
 refreshBtn.addEventListener('click', fetchPlayers);
 playersFilter.addEventListener('input', renderPlayers);
 
-(async function initializeAuth() {
-  try {
-    const res = await fetch('/api/auth/me');
-    isAuthenticated = res.ok && Boolean((await res.json()).authenticated);
-  } catch (_error) {
-    isAuthenticated = false;
-  }
-  if (isAuthenticated) await onAuthenticated();
-  showView(isAuthenticated ? 'view-home' : 'view-login');
+(async function init() {
+  await loadConfig();
+  greet();
 })();
