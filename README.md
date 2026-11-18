@@ -1,12 +1,14 @@
 # MySportsAgent
 
-A basketball scouting prototype. It holds season stats for five teams and lets you search them in plain English, for example *"guard with at least 20 points per game"* or *"WNBA forward with 8 rebounds and at least 20 games"*.
+A scouting prototype for basketball, soccer and American football. It holds season stats for 375 players on 13 teams and lets you search the basketball players in plain English, for example *"guard with at least 20 points per game"* or *"WNBA forward with 8 rebounds and at least 20 games"*.
 
-Search runs on a rule-based (regex) parser by default. Optionally, a Claude agent can handle the requests instead.
+Search runs on a rule-based (regex) parser by default. Optionally, a Claude agent can handle the requests instead. Search covers basketball for now; soccer and football players can be browsed and added.
 
 ## What's in the database
 
-Per-game regular-season averages for 91 players, from ESPN team stat pages:
+Regular-season statistics from ESPN's public team pages.
+
+**Basketball**: per-game averages for 91 players (games, minutes, points, rebounds, assists, steals, blocks, turnovers, FG/3PT/FT made, attempted and percentage).
 
 | Team | League | Season | Source |
 |---|---|---|---|
@@ -16,16 +18,37 @@ Per-game regular-season averages for 91 players, from ESPN team stat pages:
 | Las Vegas Aces | WNBA | 2025 | [ESPN](https://www.espn.com/wnba/team/stats/_/name/lv/season/2025/seasontype/2) |
 | Phoenix Mercury | WNBA | 2025 | [ESPN](https://www.espn.com/wnba/team/stats/_/name/phx/season/2025/seasontype/2) |
 
-Each player has: games played and started, minutes, points, rebounds, assists, steals, blocks, turnovers, FG/3PT/FT made, attempted and percentage, plus position, team, league and gender. Seeded players have no height, age, nationality or scouting notes; you can add players with those fields through the app.
+**Soccer**: league season totals for the 125 players who appeared (appearances, substitute appearances, goals, assists, shots, shots on target, fouls committed and suffered, yellow and red cards; saves and goals conceded for goalkeepers), plus nationality.
 
-The seed files are plain CSVs in [`data/seed/`](data/seed/) and are listed in [`data/seed/teams.json`](data/seed/teams.json). To add a team, drop in another CSV with the same columns and add an entry to `teams.json`.
+| Team | League | Season | Source |
+|---|---|---|---|
+| Liverpool | Premier League | 2024-25 | [ESPN](https://www.espn.com/soccer/team/squad/_/id/364/league/ENG.1/season/2024) |
+| Arsenal | Premier League | 2024-25 | [ESPN](https://www.espn.com/soccer/team/squad/_/id/359/league/ENG.1/season/2024) |
+| Manchester City | Premier League | 2024-25 | [ESPN](https://www.espn.com/soccer/team/squad/_/id/382/league/ENG.1/season/2024) |
+| Gotham FC | NWSL | 2025 | [ESPN](https://www.espn.com/soccer/team/squad/_/id/15364/league/USA.NWSL/season/2025) |
+| Washington Spirit | NWSL | 2025 | [ESPN](https://www.espn.com/soccer/team/squad/_/id/15365/league/USA.NWSL/season/2025) |
+
+**American football**: regular-season totals for 159 players (games; passing completions, attempts, yards, touchdowns and interceptions; rushing carries, yards and touchdowns; receptions, targets, receiving yards and touchdowns; tackles, sacks, forced fumbles, interceptions and passes defended; field goals and extra points).
+
+| Team | League | Season | Source |
+|---|---|---|---|
+| Philadelphia Eagles | NFL | 2024 | [ESPN](https://www.espn.com/nfl/team/stats/_/name/phi/season/2024/seasontype/2) |
+| Kansas City Chiefs | NFL | 2024 | [ESPN](https://www.espn.com/nfl/team/stats/_/name/kc/season/2024/seasontype/2) |
+| Buffalo Bills | NFL | 2024 | [ESPN](https://www.espn.com/nfl/team/stats/_/name/buf/season/2024/seasontype/2) |
+
+The Chiefs file lists the 27 defenders with the most tackles; a few reserves with only a handful of tackles are not included.
+
+Seeded players have no height, age or scouting notes (soccer players include nationality). You can add players with those fields through the app.
+
+The seed files are plain CSVs in [`data/seed/`](data/seed/) and are listed in [`data/seed/teams.json`](data/seed/teams.json) with their sport. To add a team, drop in another CSV with the same columns as the other teams of that sport and add an entry to `teams.json`.
 
 ## Features
 
-- **Scout assistant**: ask in plain English and get a ranked table of matching players.
-- **Player database**: a filterable table of all players.
-- **ScoutBoard**: add your own player with season averages, traits and notes. The database is capped at 500 players (`MAX_PLAYERS`). Highlight-video uploads are switched off on the public demo; set `ALLOW_VIDEO_UPLOADS=true` to enable them.
-- **Boxscore upload**: upload a game boxscore (xlsx/csv). Each row is folded into that player's season averages; shooting percentages are recomputed from makes and attempts. Try [`data/samples/wnba-finals-2025-game4.csv`](data/samples/wnba-finals-2025-game4.csv).
+- **Scout assistant**: ask in plain English and get a ranked table of matching basketball players.
+- **Player database**: one tab per sport, each with that sport's stat columns, plus a text filter.
+- **ScoutBoard**: pick a sport (Basketball, Soccer or American Football), then fill in a form with that sport's positions and stats. The database is capped at 500 players in total (`MAX_PLAYERS`). Highlight-video uploads are switched off on the public demo; set `ALLOW_VIDEO_UPLOADS=true` to enable them.
+- **Adding a sport or a stat**: sports, positions and stats are defined in one place, [`server/sports.js`](server/sports.js). The ScoutBoard forms and database tables are generated from it.
+- **Boxscore upload** (basketball): upload a game boxscore (xlsx/csv). Each row is folded into that player's season averages; shooting percentages are recomputed from makes and attempts. Try [`data/samples/wnba-finals-2025-game4.csv`](data/samples/wnba-finals-2025-game4.csv).
 
 ## Run locally
 
@@ -102,15 +125,16 @@ The free plan has no persistent disk, so the database is rebuilt from the seed f
 ```
 server/
   index.js    Express app and routes
+  sports.js   Sports, positions and stats (drives the forms and tables)
   db.js       SQLite schema, seeding, boxscore merge
-  search.js   Rule-based parser and the shared filter/ranking engine
+  search.js   Rule-based parser and the shared filter/ranking engine (basketball)
   agent.js    Optional Claude agent (tool use over search.js)
 client/       Static HTML/CSS/JS frontend
-data/seed/    Team CSVs + teams.json (committed)
+data/seed/    Team CSVs for all three sports + teams.json (committed)
 data/samples/ Example boxscore for the upload feature
 test/         node:test suites (agent tests use a mocked SDK, no API key needed)
 ```
 
 ## Data note
 
-Statistics are factual season averages from ESPN's public team pages, included for demonstration. No personal data beyond names, teams and on-court statistics is stored for seeded players.
+Statistics are factual season figures from ESPN's public team pages, included for demonstration. No personal data beyond names, teams, nationality (soccer) and on-field statistics is stored for seeded players.

@@ -38,19 +38,40 @@
           <div class="view-header">
             <h2>ScoutBoard</h2>
             <div class="header-actions">
-              <a href="#" class="top-link" data-target="view-home">Back to Home</a>            </div>
+              <a href="#" class="top-link" data-target="view-home">Back to Home</a>
+            </div>
+          </div>
+          <p class="subtitle">Which sport is your new player in?</p>
+
+          <!-- Filled from /api/sports: one card per sport. -->
+          <div id="sport-cards" class="sport-cards"></div>
+        </section>
+      </main>
+    </section>
+
+    <section id="view-scoutboard-form" class="page-view">
+      <main class="single-view-wrap">
+        <section class="panel intake-panel">
+          <div class="view-header">
+            <h2 id="sport-form-title">ScoutBoard</h2>
+            <div class="header-actions">
+              <a href="#" class="top-link" data-target="view-scoutboard">Back to sports</a>
+              <a href="#" class="top-link" data-target="view-home">Back to Home</a>
+            </div>
           </div>
           <p class="subtitle">Add a new player profile</p>
 
           <form id="player-form" enctype="multipart/form-data">
+            <input type="hidden" name="sport" id="sport-input" />
+
             <div class="grid two">
               <label>
-                First Name *
-                <input name="firstName" required />
+                First Name
+                <input name="firstName" maxlength="100" />
               </label>
               <label>
                 Last Name *
-                <input name="lastName" required />
+                <input name="lastName" required maxlength="100" />
               </label>
             </div>
 
@@ -69,130 +90,40 @@
               </label>
               <label>
                 Height
-                <input name="heightDisplay" placeholder="e.g. 6'2&quot;" />
+                <input name="heightDisplay" maxlength="20" placeholder="e.g. 6'2&quot; or 188 cm" />
               </label>
               <label>
                 Weight
-                <input name="weightDisplay" placeholder="e.g. 180 lbs" />
-              </label>
-            </div>
-
-            <div class="grid two">
-              <label>
-                Nationality
-                <input name="nationality" placeholder="e.g. USA, Spain, Nigeria" />
-              </label>
-              <label>
-                Plays in National Team
-                <select name="playsInNationalTeam">
-                  <option value="">Unknown</option>
-                  <option value="yes">Yes</option>
-                  <option value="no">No</option>
-                </select>
-              </label>
-            </div>
-
-            <div class="grid two">
-              <label>
-                Position *
-                <input name="position" required placeholder="e.g. Shooting Guard" />
-              </label>
-              <label>
-                Handedness
-                <select name="handedness">
-                  <option value="">Unknown</option>
-                  <option value="left">Left</option>
-                  <option value="right">Right</option>
-                  <option value="ambidextrous">Ambidextrous</option>
-                </select>
+                <input name="weightDisplay" maxlength="20" placeholder="e.g. 180 lbs or 82 kg" />
               </label>
             </div>
 
             <div class="grid three">
               <label>
                 Team
-                <input name="team" placeholder="e.g. CB Gran Canaria" />
+                <input name="team" maxlength="100" id="team-input" />
               </label>
               <label>
                 League
-                <input name="league" placeholder="e.g. Liga ACB" />
+                <input name="league" maxlength="100" id="league-input" />
               </label>
               <label>
                 Season
-                <input name="season" placeholder="e.g. 2025-26" />
+                <input name="season" maxlength="20" placeholder="e.g. 2025-26" />
               </label>
             </div>
 
-            <p class="subtitle">Season averages (per game)</p>
-
-            <div class="grid four">
-              <label>
-                Games Played
-                <input name="gamesPlayed" type="number" min="0" max="200" step="1" placeholder="30" />
-              </label>
-              <label>
-                MIN
-                <input name="minutesPerGame" type="number" min="0" max="60" step="0.1" placeholder="28.5" />
-              </label>
-              <label>
-                PPG
-                <input name="pointsPerGame" type="number" min="0" max="80" step="0.1" placeholder="14.2" />
-              </label>
-              <label>
-                RPG
-                <input name="reboundsPerGame" type="number" min="0" max="30" step="0.1" placeholder="6.1" />
-              </label>
-            </div>
-
-            <div class="grid four">
-              <label>
-                APG
-                <input name="assistsPerGame" type="number" min="0" max="30" step="0.1" placeholder="5.4" />
-              </label>
-              <label>
-                SPG
-                <input name="stealsPerGame" type="number" min="0" max="10" step="0.1" placeholder="1.8" />
-              </label>
-              <label>
-                BPG
-                <input name="blocksPerGame" type="number" min="0" max="10" step="0.1" placeholder="0.6" />
-              </label>
-              <label>
-                TOV
-                <input name="turnoversPerGame" type="number" min="0" max="15" step="0.1" placeholder="2.1" />
-              </label>
-            </div>
-
-            <div class="grid four">
-              <label>
-                FG%
-                <input name="fgPercentage" type="number" min="0" max="100" step="0.1" placeholder="47.3" />
-              </label>
-              <label>
-                3PT%
-                <input name="threePtPercentage" type="number" min="0" max="100" step="0.1" placeholder="40.0" />
-              </label>
-              <label>
-                FT%
-                <input name="ftPercentage" type="number" min="0" max="100" step="0.1" placeholder="82.5" />
-              </label>
-              <label>
-                Vertical (inches)
-                <input name="verticalInches" type="number" min="0" max="80" step="0.1" placeholder="31" />
-              </label>
-            </div>
+            <!-- Position, handedness/foot, nationality and the stat groups for the chosen sport. -->
+            <div id="sport-fields"></div>
 
             <label>
               Keywords / Traits
-              <input
-                name="keywords"
-                placeholder="e.g. long guard, quick, aggressive on defense, athletic"
-              />
+              <input name="keywords" maxlength="300" id="keywords-input" />
             </label>
 
             <label>
               Notes
-              <textarea name="notes" rows="3" placeholder="Additional player characteristics"></textarea>
+              <textarea name="notes" rows="3" maxlength="1000" placeholder="Additional player characteristics"></textarea>
             </label>
 
             <label>
@@ -212,25 +143,31 @@
       <main class="single-view-wrap">
         <section class="panel table-panel">
           <div class="view-header">
-            <h2>Player Database (SQLite-backed)</h2>
+            <h2>Player Database</h2>
             <div class="header-actions">
-              <a href="#" class="top-link" data-target="view-home">Back to Home</a>            </div>
+              <a href="#" class="top-link" data-target="view-home">Back to Home</a>
+            </div>
           </div>
+
+          <div id="sport-tabs" class="sport-tabs" role="tablist"></div>
+
           <div class="table-header">
-            <p class="subtitle">Season averages per game. Sorted by points.</p>
+            <p id="players-subtitle" class="subtitle"></p>
             <button id="refresh-btn">Refresh</button>
           </div>
-          <form id="boxscore-form" class="boxscore-form" enctype="multipart/form-data">
-            <label>
-              Upload a game boxscore (xlsx/csv). Each row is added to that player's season averages.
-              <input id="boxscore-file" name="boxscoreFile" type="file" accept=".xlsx,.xls,.csv" required />
-            </label>
-            <button type="submit">Update Stats</button>
-          </form>
-          <p id="boxscore-status" class="status"></p>
+          <div id="boxscore-section">
+            <form id="boxscore-form" class="boxscore-form" enctype="multipart/form-data">
+              <label>
+                Upload a basketball game boxscore (xlsx/csv). Each row is added to that player's season averages.
+                <input id="boxscore-file" name="boxscoreFile" type="file" accept=".xlsx,.xls,.csv" required />
+              </label>
+              <button type="submit">Update Stats</button>
+            </form>
+            <p id="boxscore-status" class="status"></p>
+          </div>
           <label>
             Filter
-            <input id="players-filter" placeholder="Type a name, team, league or position" />
+            <input id="players-filter" placeholder="Type a name, team, league, position or nationality" />
           </label>
           <p id="players-count" class="status"></p>
           <div class="table-wrap">
@@ -246,9 +183,10 @@
           <div class="view-header">
             <h2>AI Scout Assistant</h2>
             <div class="header-actions">
-              <a href="#" class="top-link" data-target="view-home">Back to Home</a>            </div>
+              <a href="#" class="top-link" data-target="view-home">Back to Home</a>
+            </div>
           </div>
-          <p class="subtitle">Describe the player you are looking for</p>
+          <p class="subtitle">Describe the basketball player you are looking for (soccer and American football search coming soon)</p>
           <p id="engine-status" class="engine-status"></p>
 
           <div id="chat-log" class="chat-log"></div>

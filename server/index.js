@@ -5,6 +5,7 @@ const fs = require('fs');
 const XLSX = require('xlsx');
 
 const { openDatabase, toNumberOrNull, slug } = require('./db');
+const { SPORTS, SPORT_IDS, statDefs } = require('./sports');
 const { runRuleChat, normalizeEntity, parseHeightToInches, calculateAgeFromDob } = require('./search');
 const { isAgentEnabled, isAgentRequested, hasCredential, runAgentChat, MODEL } = require('./agent');
 
@@ -127,45 +128,63 @@ function parseRowName(row) {
 
 // ---------- player intake ----------
 
+const clip = (value, max = 100) => String(value || '').trim().slice(0, max);
+
 function playerFromForm(body, file) {
+  const sport = String(body.sport || 'basketball');
+  const def = SPORTS[sport];
+  if (!def) throw new ClientError(`Unknown sport. Choose one of: ${SPORT_IDS.join(', ')}.`);
+
   const now = new Date().toISOString();
-  const firstName = String(body.firstName || '').trim();
-  const lastName = String(body.lastName || '').trim();
-  const heightDisplay = String(body.heightDisplay || '').trim();
-  const weightDisplay = String(body.weightDisplay || '').trim();
+  const firstName = clip(body.firstName);
+  const lastName = clip(body.lastName);
+  const heightDisplay = clip(body.heightDisplay, 20);
+  const weightDisplay = clip(body.weightDisplay, 20);
   const weightMatch = weightDisplay.toLowerCase().match(/(\d+(?:\.\d+)?)\s*(kg|lb|lbs|pounds?)?/);
   const weightLbs = weightMatch ? Number(weightMatch[1]) * (weightMatch[2] === 'kg' ? 2.20462 : 1) : null;
 
-  const numericFields = [
-    'gamesPlayed', 'minutesPerGame', 'pointsPerGame', 'reboundsPerGame', 'assistsPerGame', 'stealsPerGame',
-    'blocksPerGame', 'turnoversPerGame', 'fgPercentage', 'threePtPercentage', 'ftPercentage', 'verticalInches'
-  ];
+  const position = clip(body.position);
+  if (position && !def.positions.includes(position)) {
+    throw new ClientError(`Unknown ${def.label} position. Choose one of: ${def.positions.join(', ')}.`);
+  }
+  const handednessOptions = def.handedness ? def.handedness.options.map(([value]) => value) : [];
 
   const record = {
     id: `${slug(`${firstName}-${lastName}`)}-${Date.now()}`,
+    sport,
     createdAt: now,
     updatedAt: now,
     firstName,
     lastName,
-    gender: body.gender,
-    nationality: body.nationality ? normalizeEntity(body.nationality) : '',
-    playsInNationalTeam: body.playsInNationalTeam,
-    dob: body.dob,
+    gender: ['male', 'female'].includes(body.gender) ? body.gender : '',
+    nationality: clip(body.nationality, 60), // search normalizes case and accents itself
+    playsInNationalTeam: def.nationalTeam && ['yes', 'no'].includes(body.playsInNationalTeam) ? body.playsInNationalTeam : '',
+    dob: clip(body.dob, 10),
     heightDisplay,
     heightInches: parseHeightToInches(heightDisplay),
     weightDisplay,
     weightLbs: weightLbs === null ? null : Math.round(weightLbs * 10) / 10,
-    position: String(body.position || '').trim(),
-    handedness: body.handedness,
-    team: String(body.team || '').trim(),
-    league: String(body.league || '').trim(),
-    season: String(body.season || '').trim(),
-    keywords: String(body.keywords || '').trim(),
-    notes: String(body.notes || '').trim(),
+    position,
+    handedness: handednessOptions.includes(body.handedness) ? body.handedness : '',
+    team: clip(body.team),
+    league: clip(body.league),
+    season: clip(body.season, 20),
+    keywords: clip(body.keywords, 300),
+    notes: clip(body.notes, 1000),
     highlightVideoPath: file ? `/uploads/${file.filename}` : '',
     source: 'manual entry'
   };
-  for (const key of numericFields) record[key] = toNumberOrNull(body[key]);
+
+  // Basketball stats map to their own columns; other sports go into the stats JSON.
+  if (sport === 'basketball') {
+    for (const stat of statDefs(sport)) record[stat.key] = toNumberOrNull(body[stat.key]);
+  } else {
+    record.stats = {};
+    for (const stat of statDefs(sport)) {
+      const value = toNumberOrNull(body[stat.key]);
+      if (value !== null) record.stats[stat.key] = value;
+    }
+  }
   return record;
 }
 
@@ -186,27 +205,36 @@ function publicPlayer(player) {
   return { ...rest, age: calculateAgeFromDob(dob) };
 }
 
+// The Scout Assistant and boxscore uploads cover basketball only for now.
+const basketballTeams = store.teams.filter((t) => (t.sport || 'basketball') === 'basketball');
+const basketballPlayers = () => store.readPlayers().filter((p) => p.sport === 'basketball');
+const basketballStore = { ...store, teams: basketballTeams, readPlayers: basketballPlayers };
+
 app.get('/api/config', (_req, res) => {
   res.json({
     agentEnabled: isAgentEnabled(),
     videoUploadsEnabled: VIDEO_UPLOADS_ENABLED,
     maxPlayers: MAX_PLAYERS,
     model: isAgentEnabled() ? MODEL : null,
-    teams: store.teams.map(({ team, league, season }) => ({ team, league, season }))
+    teams: store.teams.map(({ sport = 'basketball', team, league, season }) => ({ sport, team, league, season }))
   });
 });
+
+app.get('/api/sports', (_req, res) => res.json(SPORTS));
 
 app.get('/api/players', (_req, res) => res.json(store.readPlayers().map(publicPlayer)));
 
 app.post('/api/players', videoUpload.single('highlightVideo'), (req, res) => {
+  // Validate first so invalid input gets a specific error even when the database is full.
+  const record = playerFromForm(req.body || {}, req.file);
+  // A last name alone is fine for single-name players (e.g. "Rodri").
+  if (!record.lastName || !record.position) {
+    return res.status(400).json({ error: 'Last name and position are required.' });
+  }
   if (store.countPlayers() >= MAX_PLAYERS) {
     return res.status(409).json({
       error: `The demo database is full (${MAX_PLAYERS} players). It resets to the original teams when the server restarts.`
     });
-  }
-  const record = playerFromForm(req.body || {}, req.file);
-  if (!record.firstName || !record.lastName || !record.position) {
-    return res.status(400).json({ error: 'firstName, lastName, and position are required.' });
   }
   store.insertPlayer(record);
   return res.status(201).json(publicPlayer(store.getPlayer(record.id)));
@@ -225,7 +253,7 @@ app.post('/api/boxscores/upload', boxscoreUpload.single('boxscoreFile'), (req, r
   }
   if (!rows.length) return res.status(400).json({ error: 'No rows found in uploaded boxscore.' });
 
-  const players = store.readPlayers();
+  const players = basketballPlayers();
   const byName = new Map();
   for (const p of players) {
     const key = normalizeEntity(`${p.firstName} ${p.lastName}`);
@@ -292,7 +320,7 @@ app.post('/api/agent/chat', asyncRoute(async (req, res) => {
 
   if (isAgentEnabled() && text) {
     try {
-      const reply = await runAgentChat(chat.agent, text, store);
+      const reply = await runAgentChat(chat.agent, text, basketballStore);
       return res.json({ ...reply, matches: reply.matches ? reply.matches.map(publicPlayer) : null });
     } catch (error) {
       console.error('Agent request failed, falling back to rule-based search:', error.message);
@@ -300,7 +328,7 @@ app.post('/api/agent/chat', asyncRoute(async (req, res) => {
     }
   }
 
-  const result = runRuleChat(chat.rules, { message: text, forceSearch }, store.readPlayers(), store.teams);
+  const result = runRuleChat(chat.rules, { message: text, forceSearch }, basketballPlayers(), basketballTeams);
   // Follow-up questions and resets carry no player lists.
   const response = {
     ...result,

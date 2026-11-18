@@ -290,6 +290,89 @@ a {
   margin-top: 4px;
 }
 
+/* ScoutBoard: one card per sport */
+.sport-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.sport-card {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 8px;
+  min-height: 190px;
+  padding: 22px 16px;
+  border: 1px solid var(--border);
+  border-radius: 28px;
+  background: #fffdf8;
+  color: var(--ink);
+  font-weight: 400;
+  text-align: center;
+}
+
+.sport-card:hover,
+.sport-card:focus-visible {
+  background: #f1f8f6;
+  border-color: var(--accent);
+  transform: translateY(-2px);
+}
+
+.sport-card-icon {
+  font-size: 3rem;
+  line-height: 1;
+}
+
+.sport-card-label {
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+
+.sport-card-description {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+/* ScoutBoard form: stats grouped by category */
+.stat-group {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 14px 14px;
+  margin: 14px 0;
+}
+
+.stat-group legend {
+  padding: 0 6px;
+  font-weight: 700;
+}
+
+/* Player Database: sport tabs */
+.sport-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 6px 0 10px;
+}
+
+.sport-tab {
+  background: #fffdf8;
+  color: var(--ink);
+  border: 1px solid var(--border);
+}
+
+.sport-tab:hover {
+  background: #f7f0e3;
+}
+
+.sport-tab[aria-selected='true'],
+.sport-tab[aria-selected='true']:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
 @media (max-width: 980px) {
   .layout {
     grid-template-columns: 1fr;
@@ -297,6 +380,14 @@ a {
 
   .boxscore-form {
     grid-template-columns: 1fr;
+  }
+
+  .sport-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .sport-card {
+    min-height: 0;
   }
 
   .grid.four,

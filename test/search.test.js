@@ -11,17 +11,36 @@ const { validateSearchInput } = require('../server/agent');
 const SEED_DIR = path.join(__dirname, '..', 'data', 'seed');
 const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'msa-test-'));
 const store = openDatabase({ dbPath: path.join(tmpDir, 'test.db'), seedDir: SEED_DIR });
-const players = store.readPlayers();
-const teams = store.teams;
+// The rule-based search covers basketball, like the app's Scout Assistant.
+const players = store.readPlayers().filter((p) => p.sport === 'basketball');
+const teams = store.teams.filter((t) => t.sport === 'basketball');
 
 const names = (list) => list.map((p) => `${p.firstName} ${p.lastName}`);
 const search = (query) => searchPlayers(players, parseCriteria(query, {}, { teams }));
 
-test('seeds 5 teams: 3 NBA (male), 2 WNBA (female)', () => {
+test('seeds 5 basketball teams: 3 NBA (male), 2 WNBA (female)', () => {
   assert.equal(teams.length, 5);
   assert.equal(teams.filter((t) => t.league === 'NBA' && t.gender === 'male').length, 3);
   assert.equal(teams.filter((t) => t.league === 'WNBA' && t.gender === 'female').length, 2);
   assert.equal(players.length, 91);
+});
+
+test('seeds 5 soccer teams and 3 NFL teams with sport-specific stats', () => {
+  const all = store.readPlayers();
+  const soccerTeams = store.teams.filter((t) => t.sport === 'soccer');
+  assert.deepEqual(soccerTeams.map((t) => t.league), ['Premier League', 'Premier League', 'Premier League', 'NWSL', 'NWSL']);
+  assert.equal(store.teams.filter((t) => t.sport === 'football').length, 3);
+
+  const find = (name) => all.find((p) => `${p.firstName} ${p.lastName}`.trim() === name);
+  assert.deepEqual(
+    { goals: find('Mohamed Salah').stats.goals, assists: find('Mohamed Salah').stats.assists, position: find('Mohamed Salah').position },
+    { goals: 29, assists: 18, position: 'Forward' }
+  );
+  assert.equal(find('Rodri').lastName, 'Rodri'); // single-name player
+  assert.equal(find('Esther González').gender, 'female');
+  assert.equal(find('Saquon Barkley').stats.rushYds, 2005);
+  assert.equal(find('Saquon Barkley').position, 'Running Back');
+  assert.equal(find('Jake Elliott').position, 'Kicker');
 });
 
 test('"guard with at least 20 points per game"', () => {

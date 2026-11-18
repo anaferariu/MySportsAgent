@@ -1,14 +1,17 @@
 const fs = require('fs');
 const path = require('path');
 const Database = require('better-sqlite3');
+const { SPORTS, POSITION_CODES, statDefs } = require('./sports');
 
 // Bump when the players/player_game_stats layout changes. An older local DB is
 // dropped and rebuilt from data/seed on the next start.
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 // [js key, sql column, sql type]. Single source of truth for the players table.
+// Basketball stats have their own columns; other sports keep theirs in `stats` (JSON).
 const PLAYER_COLUMNS = [
   ['id', 'id', 'TEXT PRIMARY KEY'],
+  ['sport', 'sport', "TEXT NOT NULL DEFAULT 'basketball'"],
   ['createdAt', 'created_at', 'TEXT NOT NULL'],
   ['updatedAt', 'updated_at', 'TEXT NOT NULL'],
   ['firstName', 'first_name', 'TEXT NOT NULL'],
@@ -48,7 +51,8 @@ const PLAYER_COLUMNS = [
   ['keywords', 'keywords', 'TEXT'],
   ['notes', 'notes', 'TEXT'],
   ['highlightVideoPath', 'highlight_video_path', 'TEXT'],
-  ['source', 'source', 'TEXT']
+  ['source', 'source', 'TEXT'],
+  ['stats', 'stats', 'TEXT']
 ];
 
 const NUMERIC_KEYS = new Set(PLAYER_COLUMNS.filter(([, , type]) => type === 'REAL').map(([key]) => key));
@@ -105,8 +109,10 @@ function parseCsv(text) {
   return body.map((cells) => Object.fromEntries(header.map((name, idx) => [name.trim(), (cells[idx] || '').trim()])));
 }
 
+// Single-name players ("Rodri", "Ederson") are stored as a last name only.
 function splitName(fullName) {
   const parts = String(fullName || '').trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 1) return { firstName: '', lastName: parts[0] };
   return { firstName: parts[0] || '', lastName: parts.slice(1).join(' ') };
 }
 
@@ -120,18 +126,39 @@ function slug(value) {
 }
 
 function seedRowToPlayer(row, team, now) {
+  const sport = team.sport || 'basketball';
   const { firstName, lastName } = splitName(row.name);
-  return {
+  const common = {
     id: slug(`${team.league}-${team.team}-${row.name}`),
+    sport,
     createdAt: now,
     updatedAt: now,
     firstName,
     lastName,
     gender: team.gender,
-    position: POSITION_NAMES[row.pos] || row.pos,
     team: team.team,
     league: team.league,
     season: team.season,
+    source: team.source
+  };
+
+  if (sport !== 'basketball') {
+    const stats = {};
+    for (const def of statDefs(sport)) {
+      const value = toNumberOrNull(row[def.csv]);
+      if (value !== null) stats[def.key] = value;
+    }
+    return {
+      ...common,
+      position: (POSITION_CODES[sport] || {})[row.pos] || row.pos,
+      nationality: row.nat || '',
+      stats
+    };
+  }
+
+  return {
+    ...common,
+    position: POSITION_NAMES[row.pos] || row.pos,
     gamesPlayed: toNumberOrNull(row.gp),
     gamesStarted: toNumberOrNull(row.gs),
     minutesPerGame: toNumberOrNull(row.min),
@@ -149,8 +176,7 @@ function seedRowToPlayer(row, team, now) {
     threePtPercentage: toNumberOrNull(row.tp_pct),
     ftMadePerGame: toNumberOrNull(row.ftm),
     ftAttemptsPerGame: toNumberOrNull(row.fta),
-    ftPercentage: toNumberOrNull(row.ft_pct),
-    source: team.source
+    ftPercentage: toNumberOrNull(row.ft_pct)
   };
 }
 
@@ -254,7 +280,7 @@ function openDatabase({ dbPath, seedDir }) {
     INSERT INTO players (${PLAYER_COLUMNS.map(([, col]) => col).join(', ')})
     VALUES (${PLAYER_COLUMNS.map(([key]) => `@${key}`).join(', ')})
   `);
-  const selectAllPlayersStmt = db.prepare('SELECT * FROM players ORDER BY points_per_game DESC, last_name');
+  const selectAllPlayersStmt = db.prepare('SELECT * FROM players ORDER BY sport, points_per_game DESC, last_name');
   const selectPlayerStmt = db.prepare('SELECT * FROM players WHERE id = ?');
   const selectGamesStmt = db.prepare(
     'SELECT * FROM player_game_stats WHERE player_id = ? ORDER BY created_at DESC LIMIT ?'
@@ -272,6 +298,7 @@ function openDatabase({ dbPath, seedDir }) {
   function rowToPlayer(row) {
     const player = {};
     for (const [key, col] of PLAYER_COLUMNS) player[key] = row[col] ?? null;
+    player.stats = player.stats ? JSON.parse(player.stats) : {};
     return player;
   }
 
@@ -279,7 +306,10 @@ function openDatabase({ dbPath, seedDir }) {
     const params = {};
     for (const [key] of PLAYER_COLUMNS) {
       const value = record[key];
-      params[key] = NUMERIC_KEYS.has(key) ? toNumberOrNull(value) : value === undefined || value === '' ? null : String(value);
+      if (key === 'stats') params[key] = value && Object.keys(value).length ? JSON.stringify(value) : null;
+      else if (key === 'sport') params[key] = SPORTS[value] ? value : 'basketball';
+      else if (key === 'firstName' || key === 'lastName') params[key] = String(value || '').trim(); // NOT NULL columns
+      else params[key] = NUMERIC_KEYS.has(key) ? toNumberOrNull(value) : value === undefined || value === '' ? null : String(value);
     }
     insertPlayerStmt.run(params);
   }

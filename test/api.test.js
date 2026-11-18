@@ -8,8 +8,8 @@ const path = require('path');
 process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'msa-api-'));
 delete process.env.SEARCH_ENGINE;
 delete process.env.ALLOW_VIDEO_UPLOADS;
-// 91 seeded players + room for exactly one more, so the cap is reachable in tests.
-process.env.MAX_PLAYERS = '92';
+// 375 seeded players + room for exactly the two the tests add, so the cap is reachable.
+process.env.MAX_PLAYERS = '377';
 const app = require('../server/index');
 
 let server;
@@ -29,8 +29,24 @@ test('players are public and carry age, not date of birth', async () => {
   const res = await fetch(`${base}/api/players`);
   assert.equal(res.status, 200);
   const players = await res.json();
-  assert.equal(players.length, 91);
+  const bySport = {};
+  for (const p of players) bySport[p.sport] = (bySport[p.sport] || 0) + 1;
+  assert.deepEqual(bySport, { basketball: 91, football: 159, soccer: 125 });
   assert.ok(players.every((p) => !('dob' in p)));
+});
+
+test('sport definitions are served for the forms', async () => {
+  const sports = await (await fetch(`${base}/api/sports`)).json();
+  assert.deepEqual(Object.keys(sports), ['basketball', 'soccer', 'football']);
+  assert.ok(sports.soccer.positions.includes('Goalkeeper'));
+  assert.ok(sports.football.statGroups.some((g) => g.title === 'Passing'));
+});
+
+test('the assistant only searches basketball for now', async () => {
+  const body = await (await chat({ sessionId: 'c0ffee00-3333-4d4d-8e8e-000000000001', message: 'forward' })).json();
+  const matches = body.done ? body.matches : (await (await chat({ sessionId: 'c0ffee00-3333-4d4d-8e8e-000000000001', forceSearch: true })).json()).matches;
+  assert.ok(matches.length > 0);
+  assert.ok(matches.every((p) => p.sport === 'basketball'));
 });
 
 test('search works without a login', async () => {
@@ -66,6 +82,41 @@ test('a player added through the form is returned with age only', async () => {
   const player = await res.json();
   assert.equal('dob' in player, false);
   assert.equal(typeof player.age, 'number');
+  assert.equal(player.sport, 'basketball');
+});
+
+test('a soccer player is saved with soccer stats', async () => {
+  const form = new FormData();
+  form.append('sport', 'soccer');
+  form.append('lastName', 'Rodrigo');
+  form.append('position', 'Midfielder');
+  form.append('handedness', 'left');
+  form.append('goals', '7');
+  form.append('assists', '11');
+  form.append('pointsPerGame', '99'); // a basketball field: ignored for soccer
+  const res = await fetch(`${base}/api/players`, { method: 'POST', body: form });
+  assert.equal(res.status, 201);
+  const player = await res.json();
+  assert.equal(player.sport, 'soccer');
+  assert.deepEqual(player.stats, { goals: 7, assists: 11 });
+  assert.equal(player.pointsPerGame, null);
+  assert.equal(player.handedness, 'left');
+});
+
+test('positions and sports are validated', async () => {
+  const wrongPosition = new FormData();
+  wrongPosition.append('sport', 'soccer');
+  wrongPosition.append('lastName', 'Wrong');
+  wrongPosition.append('position', 'Quarterback');
+  const res = await fetch(`${base}/api/players`, { method: 'POST', body: wrongPosition });
+  assert.equal(res.status, 400);
+  assert.match((await res.json()).error, /Unknown Soccer position/);
+
+  const wrongSport = new FormData();
+  wrongSport.append('sport', 'curling');
+  wrongSport.append('lastName', 'Wrong');
+  wrongSport.append('position', 'Skip');
+  assert.equal((await fetch(`${base}/api/players`, { method: 'POST', body: wrongSport })).status, 400);
 });
 
 test('video uploads are refused and nothing is saved', async () => {
@@ -90,7 +141,7 @@ test('adding players stops at the cap', async () => {
   form.append('position', 'Center');
   const res = await fetch(`${base}/api/players`, { method: 'POST', body: form });
   assert.equal(res.status, 409);
-  assert.match((await res.json()).error, /database is full \(92 players\)/);
+  assert.match((await res.json()).error, /database is full \(377 players\)/);
 });
 
 test('the sample boxscore uploads and updates 18 players', async () => {

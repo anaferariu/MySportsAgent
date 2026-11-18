@@ -2,46 +2,176 @@
   {
     "file": "okc-thunder-2024-25.csv",
     "team": "Oklahoma City Thunder",
-    "aliases": ["thunder", "okc", "oklahoma city", "oklahoma"],
+    "aliases": [
+      "thunder",
+      "okc",
+      "oklahoma city",
+      "oklahoma"
+    ],
     "league": "NBA",
     "season": "2024-25",
     "gender": "male",
-    "source": "https://www.espn.com/nba/team/stats/_/name/okc/season/2025/seasontype/2"
+    "source": "https://www.espn.com/nba/team/stats/_/name/okc/season/2025/seasontype/2",
+    "sport": "basketball"
   },
   {
     "file": "ind-pacers-2024-25.csv",
     "team": "Indiana Pacers",
-    "aliases": ["pacers", "indiana"],
+    "aliases": [
+      "pacers",
+      "indiana"
+    ],
     "league": "NBA",
     "season": "2024-25",
     "gender": "male",
-    "source": "https://www.espn.com/nba/team/stats/_/name/ind/season/2025/seasontype/2"
+    "source": "https://www.espn.com/nba/team/stats/_/name/ind/season/2025/seasontype/2",
+    "sport": "basketball"
   },
   {
     "file": "bos-celtics-2024-25.csv",
     "team": "Boston Celtics",
-    "aliases": ["celtics", "boston"],
+    "aliases": [
+      "celtics",
+      "boston"
+    ],
     "league": "NBA",
     "season": "2024-25",
     "gender": "male",
-    "source": "https://www.espn.com/nba/team/stats/_/name/bos/season/2025/seasontype/2"
+    "source": "https://www.espn.com/nba/team/stats/_/name/bos/season/2025/seasontype/2",
+    "sport": "basketball"
   },
   {
     "file": "lv-aces-2025.csv",
     "team": "Las Vegas Aces",
-    "aliases": ["aces", "las vegas", "vegas"],
+    "aliases": [
+      "aces",
+      "las vegas",
+      "vegas"
+    ],
     "league": "WNBA",
     "season": "2025",
     "gender": "female",
-    "source": "https://www.espn.com/wnba/team/stats/_/name/lv/season/2025/seasontype/2"
+    "source": "https://www.espn.com/wnba/team/stats/_/name/lv/season/2025/seasontype/2",
+    "sport": "basketball"
   },
   {
     "file": "phx-mercury-2025.csv",
     "team": "Phoenix Mercury",
-    "aliases": ["mercury", "phoenix"],
+    "aliases": [
+      "mercury",
+      "phoenix"
+    ],
     "league": "WNBA",
     "season": "2025",
     "gender": "female",
-    "source": "https://www.espn.com/wnba/team/stats/_/name/phx/season/2025/seasontype/2"
+    "source": "https://www.espn.com/wnba/team/stats/_/name/phx/season/2025/seasontype/2",
+    "sport": "basketball"
+  },
+  {
+    "sport": "soccer",
+    "file": "soccer-liverpool-2024-25.csv",
+    "team": "Liverpool",
+    "aliases": [
+      "liverpool",
+      "reds",
+      "lfc"
+    ],
+    "league": "Premier League",
+    "season": "2024-25",
+    "gender": "male",
+    "source": "https://www.espn.com/soccer/team/squad/_/id/364/league/ENG.1/season/2024"
+  },
+  {
+    "sport": "soccer",
+    "file": "soccer-arsenal-2024-25.csv",
+    "team": "Arsenal",
+    "aliases": [
+      "arsenal",
+      "gunners"
+    ],
+    "league": "Premier League",
+    "season": "2024-25",
+    "gender": "male",
+    "source": "https://www.espn.com/soccer/team/squad/_/id/359/league/ENG.1/season/2024"
+  },
+  {
+    "sport": "soccer",
+    "file": "soccer-man-city-2024-25.csv",
+    "team": "Manchester City",
+    "aliases": [
+      "man city",
+      "manchester city",
+      "city"
+    ],
+    "league": "Premier League",
+    "season": "2024-25",
+    "gender": "male",
+    "source": "https://www.espn.com/soccer/team/squad/_/id/382/league/ENG.1/season/2024"
+  },
+  {
+    "sport": "soccer",
+    "file": "soccer-gotham-fc-2025.csv",
+    "team": "Gotham FC",
+    "aliases": [
+      "gotham",
+      "nj/ny gotham"
+    ],
+    "league": "NWSL",
+    "season": "2025",
+    "gender": "female",
+    "source": "https://www.espn.com/soccer/team/squad/_/id/15364/league/USA.NWSL/season/2025"
+  },
+  {
+    "sport": "soccer",
+    "file": "soccer-washington-spirit-2025.csv",
+    "team": "Washington Spirit",
+    "aliases": [
+      "spirit",
+      "washington spirit"
+    ],
+    "league": "NWSL",
+    "season": "2025",
+    "gender": "female",
+    "source": "https://www.espn.com/soccer/team/squad/_/id/15365/league/USA.NWSL/season/2025"
+  },
+  {
+    "sport": "football",
+    "file": "football-eagles-2024.csv",
+    "team": "Philadelphia Eagles",
+    "aliases": [
+      "eagles",
+      "philadelphia",
+      "philly"
+    ],
+    "league": "NFL",
+    "season": "2024",
+    "gender": "male",
+    "source": "https://www.espn.com/nfl/team/stats/_/name/phi/season/2024/seasontype/2"
+  },
+  {
+    "sport": "football",
+    "file": "football-chiefs-2024.csv",
+    "team": "Kansas City Chiefs",
+    "aliases": [
+      "chiefs",
+      "kansas city"
+    ],
+    "league": "NFL",
+    "season": "2024",
+    "gender": "male",
+    "source": "https://www.espn.com/nfl/team/stats/_/name/kc/season/2024/seasontype/2"
+  },
+  {
+    "sport": "football",
+    "file": "football-bills-2024.csv",
+    "team": "Buffalo Bills",
+    "aliases": [
+      "bills",
+      "buffalo"
+    ],
+    "league": "NFL",
+    "season": "2024",
+    "gender": "male",
+    "source": "https://www.espn.com/nfl/team/stats/_/name/buf/season/2024/seasontype/2"
   }
 ]
