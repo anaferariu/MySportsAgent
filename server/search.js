@@ -655,12 +655,7 @@ function parseCriteria(message, previousCriteria = {}, context = {}) {
   }
   // Quarterbacks score through the air: rank them by passing TDs, not rushing + receiving.
   if (criteria.sortBy === 'total_td' && isPosition(criteria, 'quarterback')) criteria.sortBy = 'pass_td';
-  // Ratios need a minimum volume, or a 3-for-3 backup tops the list.
-  const guard = (profile.sortGuards || {})[criteria.sortBy];
-  if (guard && !hasValue(criteria[guard[0]])) criteria[guard[0]] = guard[1];
-  for (const [filterKey, [volumeKey, minimum]] of Object.entries(profile.filterGuards || {})) {
-    if (hasValue(criteria[filterKey]) && !hasValue(criteria[volumeKey])) criteria[volumeKey] = minimum;
-  }
+  applyVolumeGuards(criteria, context.sport);
 
   const top = text.match(/\b(?:top|best)\s+(\d{1,2})\b/);
   if (top) criteria.limit = Number(top[1]);
@@ -671,6 +666,27 @@ function parseCriteria(message, previousCriteria = {}, context = {}) {
   if (keywords.size) criteria.keywords = [...keywords].filter(Boolean);
 
   return criteria;
+}
+
+// Ratio filters and rankings need a minimum volume, or a 3-for-3 backup tops the
+// list. Shared by the rule-based parser and the Claude agent's search tool.
+function applyVolumeGuards(criteria, sport) {
+  const profile = profileFor(sport);
+  const guard = (profile.sortGuards || {})[criteria.sortBy];
+  if (guard && !hasValue(criteria[guard[0]])) criteria[guard[0]] = guard[1];
+  for (const [filterKey, [volumeKey, minimum]] of Object.entries(profile.filterGuards || {})) {
+    if (hasValue(criteria[filterKey]) && !hasValue(criteria[volumeKey])) criteria[volumeKey] = minimum;
+  }
+  return criteria;
+}
+
+// What a sport's search understands, for building the Claude agent's tool.
+function searchSchema(sport) {
+  const profile = profileFor(sport);
+  return {
+    thresholds: Object.fromEntries(Object.entries(profile.thresholds).map(([key, def]) => [key, { label: def.label, dir: def.dir }])),
+    sortFields: Object.fromEntries(Object.entries(profile.sortFields).map(([key, def]) => [key, { label: def.label, ascending: Boolean(def.ascending) }]))
+  };
 }
 
 function isNoPreferenceAnswer(message) {
@@ -832,7 +848,11 @@ function searchPlayers(players, criteria = {}, sport = 'basketball') {
     const value = metric(entry.player, key);
     return hasValue(value) ? Number(value) : null;
   };
-  evaluated.sort((a, b) => {
+
+  // A "most X" ranking lists only players with some X: no zero-sack pass rushers.
+  // "Fewest X" rankings (turnovers, yellow cards) keep zeros, which rank best.
+  const ranked = sort && !sort.ascending ? evaluated.filter((entry) => (statOf(entry, sort.key) || 0) > 0) : evaluated;
+  ranked.sort((a, b) => {
     if (sort) {
       const av = statOf(a, sort.key);
       const bv = statOf(b, sort.key);
@@ -846,8 +866,8 @@ function searchPlayers(players, criteria = {}, sport = 'basketball') {
   });
 
   const separate = criteria.unknownDataMode === 'separate';
-  const matches = evaluated.filter((e) => !separate || !e.unknown).map((e) => e.player);
-  const separateMatches = separate ? evaluated.filter((e) => e.unknown).map((e) => e.player) : [];
+  const matches = ranked.filter((e) => !separate || !e.unknown).map((e) => e.player);
+  const separateMatches = separate ? ranked.filter((e) => e.unknown).map((e) => e.player) : [];
 
   return {
     total: matches.length,
@@ -999,6 +1019,8 @@ module.exports = {
   parseCriteria,
   parseHeightToInches,
   searchPlayers,
+  searchSchema,
+  applyVolumeGuards,
   describeCriteria,
   runRuleChat,
   resetRuleSession,

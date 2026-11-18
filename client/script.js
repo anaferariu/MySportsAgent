@@ -292,8 +292,8 @@ let assistantSport = 'basketball';
 let config = { teams: [] };
 const chatPanes = {}; // sport -> { log, results }
 
-// The Claude agent, when enabled, handles basketball; other sports use the rules.
-const usesAgent = (sport) => agentEnabled && sport === 'basketball';
+// When the Claude agent is enabled it handles every sport tab.
+const usesAgent = () => agentEnabled;
 
 function paneFor(sport) {
   if (!chatPanes[sport]) {

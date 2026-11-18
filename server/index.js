@@ -207,11 +207,11 @@ function publicPlayer(player) {
 
 const teamsFor = (sport) => store.teams.filter((t) => (t.sport || 'basketball') === sport);
 const playersFor = (sport) => store.readPlayers().filter((p) => p.sport === sport);
+// One sport's slice of the database, for the Claude agent's tools.
+const storeFor = (sport) => ({ ...store, teams: teamsFor(sport), readPlayers: () => playersFor(sport) });
 
-// Boxscore uploads and the Claude agent cover basketball only.
-const basketballTeams = teamsFor('basketball');
+// Boxscore uploads cover basketball only.
 const basketballPlayers = () => playersFor('basketball');
-const basketballStore = { ...store, teams: basketballTeams, readPlayers: basketballPlayers };
 
 app.get('/api/config', (_req, res) => {
   res.json({
@@ -325,9 +325,9 @@ app.post('/api/agent/chat', asyncRoute(async (req, res) => {
   const sport = chatSport(req);
   let notice = null;
 
-  if (isAgentEnabled() && sport === 'basketball' && text) {
+  if (isAgentEnabled() && text) {
     try {
-      const reply = await runAgentChat(chat.agent, text, basketballStore);
+      const reply = await runAgentChat(chat.agent, text, storeFor(sport), sport);
       return res.json({ ...reply, matches: reply.matches ? reply.matches.map(publicPlayer) : null });
     } catch (error) {
       console.error('Agent request failed, falling back to rule-based search:', error.message);

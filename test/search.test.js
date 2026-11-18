@@ -221,6 +221,20 @@ test('football: rankings and ratio filters need a minimum volume', () => {
   assert.deepEqual(top(sportSearch('football')('most accurate quarterback')), ['Jalen Hurts', 'Patrick Mahomes', 'Josh Allen']);
 });
 
+test('"most X" rankings leave out players with none; "fewest X" keeps zeros', () => {
+  const rushers = sportSearch('football')('best pass rusher');
+  assert.ok(rushers.matches.length > 0);
+  assert.ok(rushers.matches.every((p) => p.stats.sacks > 0));
+  const withSacks = allPlayers.filter((p) => p.sport === 'football' && p.stats.sacks > 0).length;
+  assert.match(rushers.summary, new RegExp(`Found ${withSacks} matching`));
+
+  // Lowest-first ranking: every defender with 30+ appearances is kept, fewest cards first.
+  const disciplined = sportSearch('soccer')('most disciplined defender with 30 appearances');
+  assert.equal(disciplined.matches.length, 7);
+  assert.deepEqual(top(disciplined, 2).sort(), ['Josko Gvardiol', 'William Saliba']);
+  assert.ok(disciplined.matches.every((p, i, all) => i === 0 || all[i - 1].stats.yellowCards <= p.stats.yellowCards));
+});
+
 test('football: position groups', () => {
   const db = sportSearch('football')('defensive backs with 4 interceptions');
   assert.deepEqual(top(db), ['C.J. Gardner-Johnson', 'Reed Blankenship']);

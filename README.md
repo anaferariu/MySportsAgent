@@ -2,7 +2,7 @@
 
 A scouting prototype for basketball, soccer and American football. It holds season stats for 375 players on 13 teams and lets you search them in plain English, for example *"guard with at least 20 points per game"*, *"NWSL midfielder with 5+ assists"* or *"running back with 1000 rushing yards"*.
 
-Search runs on a rule-based (regex) parser by default. Optionally, a Claude agent can handle basketball requests instead.
+Search runs on a rule-based (regex) parser by default. Optionally, a Claude agent can handle the requests instead.
 
 ## What's in the database
 
@@ -86,6 +86,8 @@ One engine serves all three sports; each sport has a profile with its positions,
 - **Soccer**: goalkeeper/defender/midfielder/forward (and *striker*, *winger*, *centre-back*, *keeper*…), Premier League/NWSL, team names, nationality ("English midfielder"), goals, assists, goal contributions (G+A), goals per appearance, appearances, starts, shots, shots on target, max yellow/red cards ("no red cards"), max fouls, saves and goals conceded; rankings such as *top scorers*, *creators*, *shot-stoppers* or *most appearances*.
 - **American football**: positions and groups (*defensive backs*, *defensive line*, *edge*, *offensive line*), NFL, team names, passing yards/TDs/attempts, interceptions thrown (max) or made (min), completion %, rushing yards/TDs/carries, yards per carry, receptions, targets, receiving yards/TDs, scrimmage yards, total TDs, tackles, sacks, forced fumbles, passes defended, field goals and FG %. A bare "yards" or "touchdowns" means passing for quarterbacks and rushing + receiving for everyone else. Rankings include *best pass rusher* (sacks), *passer*, *rusher*, *tackler*, *ball hawk* and *most accurate quarterback*.
 
+"Most X" rankings list only players with some X (the best pass rusher list only includes players with a sack), while "fewest X" rankings such as fewest yellow cards keep zeros, which rank first.
+
 Ratio filters and rankings come with a minimum volume so tiny samples don't dominate: 2 three-point attempts per game for 3PT%, 5 appearances for goals per appearance, 100 pass attempts for completion %, 50 carries for yards per carry and 10 field-goal attempts for FG %. The summary shows these as filters, so they can be changed.
 
 In soccer and football an empty stat means it didn't happen (a defender with no shots has no shots row), so it counts as 0. Stats that only apply to some players, such as saves or completion %, quietly leave out everyone else.
@@ -99,15 +101,15 @@ SEARCH_ENGINE=agent
 ANTHROPIC_API_KEY=<your-anthropic-api-key>
 ```
 
-With only one of them set, the app stays on the rule-based search. If an agent request fails, that answer falls back to the rule-based search. The agent covers the basketball tab; the soccer and football tabs always use the rule-based search.
+With only one of them set, the app stays on the rule-based search. If an agent request fails, that answer falls back to the rule-based search. The agent works in all three sport tabs, with a separate conversation per tab.
 
 The app has no login, so with the agent on, every visitor's search is billed to your API key. Set a monthly spend limit in the Anthropic Console before enabling it on a public deployment.
 
 The agent ([`server/agent.js`](server/agent.js)) uses `claude-opus-5-5` (override with `ANTHROPIC_MODEL`). It does not receive the database. It gets:
 
-- a system prompt listing the teams and which fields exist,
-- the conversation so far, so follow-ups like "only Celtics" refine the last request,
-- three tools: `search_players` (structured filters, run by the same engine as the rule-based search), `get_player` and `list_teams`.
+- a system prompt for the selected sport, listing its teams, positions and which fields exist,
+- the conversation so far in that tab, so follow-ups like "only Celtics" refine the last request,
+- three tools: `search_players`, `get_player` and `list_teams`. The `search_players` filters, positions and rankings are generated from that sport's search profile, so the agent has exactly the filters the rule-based search understands (e.g. `min_goals` for soccer, `min_rush_yds` and `max_pass_int` for football) and the same minimum-volume rules.
 
 Claude turns the request into filters and explains the results; the result table comes directly from the search, not from the model's text. Only what the tools return (names, teams, stats and any traits or notes you entered) is sent to the API.
 

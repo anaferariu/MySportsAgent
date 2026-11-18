@@ -29,10 +29,52 @@ process.env.ANTHROPIC_API_KEY = 'test-key';
 process.env.SEARCH_ENGINE = 'agent';
 
 const { openDatabase } = require('../server/db');
-const { runAgentChat, isAgentEnabled } = require('../server/agent');
+const { runAgentChat, isAgentEnabled, buildTools, validateSearchInput } = require('../server/agent');
 
 const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'msa-agent-'));
-const store = openDatabase({ dbPath: path.join(tmpDir, 'test.db'), seedDir: path.join(__dirname, '..', 'data', 'seed') });
+const fullStore = openDatabase({ dbPath: path.join(tmpDir, 'test.db'), seedDir: path.join(__dirname, '..', 'data', 'seed') });
+// The server hands the agent one sport's slice of the database, like this.
+const storeFor = (sport) => ({
+  ...fullStore,
+  teams: fullStore.teams.filter((t) => t.sport === sport),
+  readPlayers: () => fullStore.readPlayers().filter((p) => p.sport === sport)
+});
+const store = storeFor('basketball');
+
+const searchTool = (sport) => buildTools(sport, storeFor(sport).teams).find((t) => t.name === 'search_players');
+
+test('each sport gets its own search tool filters', () => {
+  const basketball = Object.keys(searchTool('basketball').input_schema.properties);
+  const soccer = searchTool('soccer').input_schema.properties;
+  const football = searchTool('football').input_schema.properties;
+  assert.ok(basketball.includes('min_points_per_game'));
+  assert.ok('min_goals' in soccer && 'max_yellow_cards' in soccer && !('min_points_per_game' in soccer));
+  assert.deepEqual(soccer.league.enum, ['Premier League', 'NWSL']);
+  assert.ok(soccer.position.enum.includes('goalkeeper'));
+  assert.ok('min_rush_yds' in football && 'max_pass_int' in football && 'min_sacks' in football);
+  assert.ok(football.sort_by.enum.includes('sacks'));
+});
+
+test('the agent gets the same minimum-volume rules as the rule-based search', () => {
+  const criteria = validateSearchInput({ position: 'kicker', min_fg_pct: 80 }, storeFor('football').teams, 'football');
+  assert.equal(criteria.minFga, 10);
+  assert.throws(() => validateSearchInput({ min_goals: 5 }, storeFor('football').teams, 'football'), /Unknown filter/);
+});
+
+test('the agent searches soccer with soccer filters', async () => {
+  requests.length = 0;
+  scripted = [
+    { stop_reason: 'tool_use', content: [{ type: 'tool_use', id: 'tu_s', name: 'search_players', input: { position: 'forward', min_goals: 10 } }] },
+    { stop_reason: 'end_turn', content: [{ type: 'text', text: 'Salah leads with 29 goals.' }] }
+  ];
+  const reply = await runAgentChat({ messages: [] }, 'forwards with 10+ goals', storeFor('soccer'), 'soccer');
+  assert.deepEqual(reply.matches.map((p) => p.lastName).slice(0, 2), ['Salah', 'Haaland']);
+  assert.match(requests[0].system[0].text, /soccer scouting assistant/);
+  assert.match(requests[0].system[0].text, /Liverpool \(Premier League 2024-25, male\)/);
+  const toolResult = JSON.parse(requests[1].messages.at(-1).content[0].content);
+  assert.equal(toolResult.players[0].stats.goals, 29);
+  assert.equal(toolResult.players[0].stats.goalContributions, 47); // derived stats are included
+});
 
 test('the agent is opt-in: an API key alone keeps the rule-based search', () => {
   process.env.SEARCH_ENGINE = '';
