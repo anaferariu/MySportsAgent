@@ -10,11 +10,17 @@
 const SPORTS = {
   basketball: {
     label: 'Basketball',
+    noun: 'basketball', // as used mid-sentence: "the basketball player"
     icon: '🏀',
     description: 'Per-game averages: points, rebounds, assists, shooting',
     tableNote: 'Season averages per game. Sorted by points.',
     defaultSort: 'pointsPerGame',
     examples: { team: 'e.g. CB Gran Canaria', league: 'e.g. Liga ACB', keywords: 'e.g. long guard, quick, aggressive on defense' },
+    search: {
+      placeholder: 'Guard with at least 20 points per game',
+      examples: ['guard with at least 20 points per game', 'WNBA forward, 8+ rebounds', 'top 3 scorers'],
+      refine: ['only Celtics', '35% from three', 'any league']
+    },
     positions: ['Point Guard', 'Shooting Guard', 'Guard', 'Small Forward', 'Power Forward', 'Forward', 'Center'],
     handedness: { label: 'Handedness', options: [['left', 'Left'], ['right', 'Right'], ['ambidextrous', 'Ambidextrous']] },
     nationalTeam: true,
@@ -42,11 +48,17 @@ const SPORTS = {
 
   soccer: {
     label: 'Soccer',
+    noun: 'soccer',
     icon: '⚽',
     description: 'Season totals: appearances, goals, assists, shots, cards, saves',
     tableNote: 'League season totals. Sorted by goals.',
     defaultSort: 'goals',
     examples: { team: 'e.g. Ajax', league: 'e.g. Eredivisie', keywords: 'e.g. box-to-box, strong in the air, quick' },
+    search: {
+      placeholder: 'Forward with at least 10 goals',
+      examples: ['forward with at least 10 goals', 'NWSL midfielder with 5+ assists', 'top 5 scorers in the Premier League'],
+      refine: ['only Arsenal', 'at least 20 appearances', 'any position']
+    },
     positions: ['Goalkeeper', 'Defender', 'Midfielder', 'Forward'],
     handedness: { label: 'Preferred foot', options: [['left', 'Left'], ['right', 'Right'], ['both', 'Both']] },
     nationalTeam: true,
@@ -78,12 +90,18 @@ const SPORTS = {
 
   football: {
     label: 'American Football',
+    noun: 'American football',
     icon: '🏈',
     description: 'Season totals: passing, rushing, receiving, defense, kicking',
     tableNote: 'Regular-season totals. Sorted by total yards (passing + rushing + receiving).',
     defaultSort: ['passYds', 'rushYds', 'recYds'], // summed
 
     examples: { team: 'e.g. Ohio State Buckeyes', league: 'e.g. NCAA FBS', keywords: 'e.g. pocket passer, physical, good hands' },
+    search: {
+      placeholder: 'Running back with 1000 rushing yards',
+      examples: ['running back with 1000 rushing yards', 'quarterback with 25 passing touchdowns and under 10 interceptions', 'best pass rusher'],
+      refine: ['only Eagles', 'at least 10 games', 'any position']
+    },
     positions: [
       'Quarterback', 'Running Back', 'Fullback', 'Wide Receiver', 'Tight End', 'Offensive Tackle', 'Guard', 'Center',
       'Defensive End', 'Defensive Tackle', 'Linebacker', 'Cornerback', 'Safety', 'Kicker', 'Punter', 'Long Snapper'

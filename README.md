@@ -1,8 +1,8 @@
 # MySportsAgent
 
-A scouting prototype for basketball, soccer and American football. It holds season stats for 375 players on 13 teams and lets you search the basketball players in plain English, for example *"guard with at least 20 points per game"* or *"WNBA forward with 8 rebounds and at least 20 games"*.
+A scouting prototype for basketball, soccer and American football. It holds season stats for 375 players on 13 teams and lets you search them in plain English, for example *"guard with at least 20 points per game"*, *"NWSL midfielder with 5+ assists"* or *"running back with 1000 rushing yards"*.
 
-Search runs on a rule-based (regex) parser by default. Optionally, a Claude agent can handle the requests instead. Search covers basketball for now; soccer and football players can be browsed and added.
+Search runs on a rule-based (regex) parser by default. Optionally, a Claude agent can handle basketball requests instead.
 
 ## What's in the database
 
@@ -44,7 +44,7 @@ The seed files are plain CSVs in [`data/seed/`](data/seed/) and are listed in [`
 
 ## Features
 
-- **Scout assistant**: ask in plain English and get a ranked table of matching basketball players.
+- **Scout assistant**: one tab per sport. Ask in plain English and get a ranked table of matching players; each message narrows the same search, and each tab keeps its own conversation.
 - **Player database**: one tab per sport, each with that sport's stat columns, plus a text filter.
 - **ScoutBoard**: pick a sport (Basketball, Soccer or American Football), then fill in a form with that sport's positions and stats. The database is capped at 500 players in total (`MAX_PLAYERS`). Highlight-video uploads are switched off on the public demo; set `ALLOW_VIDEO_UPLOADS=true` to enable them.
 - **Adding a sport or a stat**: sports, positions and stats are defined in one place, [`server/sports.js`](server/sports.js). The ScoutBoard forms and database tables are generated from it.
@@ -72,14 +72,23 @@ Run the tests with `npm test`.
 [`server/search.js`](server/search.js) parses the request with regular expressions into a set of filters, for example:
 
 ```
-"guard with at least 20 points per game"  ->  { position: "guard", minPointsPerGame: 20 }
-"top 3 scorers"                           ->  { sortBy: "points", limit: 3 }
-"celtics center"                          ->  { team: "Boston Celtics", position: "center" }
+"guard with at least 20 points per game"           ->  { position: "guard", minPointsPerGame: 20 }
+"forward with at least 10 goals"                   ->  { position: "forward", minGoals: 10 }
+"quarterback with 25 passing TDs and under 10 INT" ->  { position: "quarterback", minPassTd: 25, maxPassInt: 10 }
+"top 3 scorers"                                    ->  { sortBy: "points", limit: 3 }
 ```
 
-It then filters and ranks players. If a request is broad (more than 12 matches), it asks up to two follow-up questions; reply `NA` to skip one, or click **Done** to search right away.
+It then filters and ranks players. Filters build up over the conversation ("only Celtics", "at least 20 appearances"); a new value replaces the old one, "any position" / "any team" / "no age limit" drops a filter, and **Done** (or typing "start over") clears everything. If a request is broad (more than 12 matches), it asks up to two follow-up questions; reply `NA` to skip one. Ranking requests ("top 5", "best pass rusher") are answered right away.
 
-Understood: positions, men's/women's, NBA/WNBA, team names, points/rebounds/assists/steals/blocks per game, max turnovers, FG/3PT/FT %, games, minutes, height, age, assist-to-turnover ratio, "top N", and traits such as *scorer*, *shooter*, *playmaker*, *rebounder* or *rim protector*, which rank by the matching stat.
+One engine serves all three sports; each sport has a profile with its positions, leagues, stat phrases, rankings and follow-up questions. What each understands:
+
+- **Basketball**: positions, men's/women's, NBA/WNBA, team names, points/rebounds/assists/steals/blocks per game, max turnovers, FG/3PT/FT %, games, minutes, height, age, assist-to-turnover ratio, "top N", and traits such as *scorer*, *shooter*, *playmaker*, *rebounder* or *rim protector*, which rank by the matching stat.
+- **Soccer**: goalkeeper/defender/midfielder/forward (and *striker*, *winger*, *centre-back*, *keeper*…), Premier League/NWSL, team names, nationality ("English midfielder"), goals, assists, goal contributions (G+A), goals per appearance, appearances, starts, shots, shots on target, max yellow/red cards ("no red cards"), max fouls, saves and goals conceded; rankings such as *top scorers*, *creators*, *shot-stoppers* or *most appearances*.
+- **American football**: positions and groups (*defensive backs*, *defensive line*, *edge*, *offensive line*), NFL, team names, passing yards/TDs/attempts, interceptions thrown (max) or made (min), completion %, rushing yards/TDs/carries, yards per carry, receptions, targets, receiving yards/TDs, scrimmage yards, total TDs, tackles, sacks, forced fumbles, passes defended, field goals and FG %. A bare "yards" or "touchdowns" means passing for quarterbacks and rushing + receiving for everyone else. Rankings include *best pass rusher* (sacks), *passer*, *rusher*, *tackler*, *ball hawk* and *most accurate quarterback*.
+
+Ratio filters and rankings come with a minimum volume so tiny samples don't dominate: 2 three-point attempts per game for 3PT%, 5 appearances for goals per appearance, 100 pass attempts for completion %, 50 carries for yards per carry and 10 field-goal attempts for FG %. The summary shows these as filters, so they can be changed.
+
+In soccer and football an empty stat means it didn't happen (a defender with no shots has no shots row), so it counts as 0. Stats that only apply to some players, such as saves or completion %, quietly leave out everyone else.
 
 ### Claude agent (optional)
 
@@ -90,7 +99,7 @@ SEARCH_ENGINE=agent
 ANTHROPIC_API_KEY=<your-anthropic-api-key>
 ```
 
-With only one of them set, the app stays on the rule-based search. If an agent request fails, that answer falls back to the rule-based search.
+With only one of them set, the app stays on the rule-based search. If an agent request fails, that answer falls back to the rule-based search. The agent covers the basketball tab; the soccer and football tabs always use the rule-based search.
 
 The app has no login, so with the agent on, every visitor's search is billed to your API key. Set a monthly spend limit in the Anthropic Console before enabling it on a public deployment.
 
@@ -127,7 +136,7 @@ server/
   index.js    Express app and routes
   sports.js   Sports, positions and stats (drives the forms and tables)
   db.js       SQLite schema, seeding, boxscore merge
-  search.js   Rule-based parser and the shared filter/ranking engine (basketball)
+  search.js   Rule-based parser and the shared filter/ranking engine, with one profile per sport
   agent.js    Optional Claude agent (tool use over search.js)
 client/       Static HTML/CSS/JS frontend
 data/seed/    Team CSVs for all three sports + teams.json (committed)

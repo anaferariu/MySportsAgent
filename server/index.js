@@ -205,9 +205,12 @@ function publicPlayer(player) {
   return { ...rest, age: calculateAgeFromDob(dob) };
 }
 
-// The Scout Assistant and boxscore uploads cover basketball only for now.
-const basketballTeams = store.teams.filter((t) => (t.sport || 'basketball') === 'basketball');
-const basketballPlayers = () => store.readPlayers().filter((p) => p.sport === 'basketball');
+const teamsFor = (sport) => store.teams.filter((t) => (t.sport || 'basketball') === sport);
+const playersFor = (sport) => store.readPlayers().filter((p) => p.sport === sport);
+
+// Boxscore uploads and the Claude agent cover basketball only.
+const basketballTeams = teamsFor('basketball');
+const basketballPlayers = () => playersFor('basketball');
 const basketballStore = { ...store, teams: basketballTeams, readPlayers: basketballPlayers };
 
 app.get('/api/config', (_req, res) => {
@@ -286,14 +289,17 @@ app.post('/api/boxscores/upload', boxscoreUpload.single('boxscoreFile'), (req, r
   return res.json({ ok: true, sourceFile: req.file.originalname, totalRows: rows.length, matchedRows: updated, unmatchedRows: unmatched.length, unmatched });
 });
 
-// Chat state per visitor, keyed by a random id the browser generates. Capped so
-// traffic can't grow memory without bound (oldest conversation is dropped first).
+// Chat state per visitor and sport, keyed by a random id the browser generates
+// plus the sport tab. Capped so traffic can't grow memory without bound (oldest
+// conversation is dropped first).
 const MAX_CHAT_SESSIONS = 2000;
 const chatSessions = new Map();
 
+const chatSport = (req) => (SPORTS[req.body && req.body.sport] ? req.body.sport : 'basketball');
+
 function chatKey(req) {
   const id = String((req.body && req.body.sessionId) || '');
-  return /^[A-Za-z0-9-]{8,64}$/.test(id) ? id : null;
+  return /^[A-Za-z0-9-]{8,64}$/.test(id) ? `${id}:${chatSport(req)}` : null;
 }
 
 function chatStateFor(key) {
@@ -316,9 +322,10 @@ app.post('/api/agent/chat', asyncRoute(async (req, res) => {
   const key = chatKey(req);
   if (!key) return res.status(400).json({ error: 'sessionId is required.' });
   const chat = chatStateFor(key);
+  const sport = chatSport(req);
   let notice = null;
 
-  if (isAgentEnabled() && text) {
+  if (isAgentEnabled() && sport === 'basketball' && text) {
     try {
       const reply = await runAgentChat(chat.agent, text, basketballStore);
       return res.json({ ...reply, matches: reply.matches ? reply.matches.map(publicPlayer) : null });
@@ -328,7 +335,7 @@ app.post('/api/agent/chat', asyncRoute(async (req, res) => {
     }
   }
 
-  const result = runRuleChat(chat.rules, { message: text, forceSearch }, basketballPlayers(), basketballTeams);
+  const result = runRuleChat(chat.rules, { message: text, forceSearch }, playersFor(sport), teamsFor(sport), sport);
   // Follow-up questions and resets carry no player lists.
   const response = {
     ...result,

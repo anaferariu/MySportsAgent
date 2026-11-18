@@ -42,11 +42,35 @@ test('sport definitions are served for the forms', async () => {
   assert.ok(sports.football.statGroups.some((g) => g.title === 'Passing'));
 });
 
-test('the assistant only searches basketball for now', async () => {
-  const body = await (await chat({ sessionId: 'c0ffee00-3333-4d4d-8e8e-000000000001', message: 'forward' })).json();
-  const matches = body.done ? body.matches : (await (await chat({ sessionId: 'c0ffee00-3333-4d4d-8e8e-000000000001', forceSearch: true })).json()).matches;
-  assert.ok(matches.length > 0);
-  assert.ok(matches.every((p) => p.sport === 'basketball'));
+test('the assistant searches the sport of the selected tab (basketball by default)', async () => {
+  const id = 'c0ffee00-3333-4d4d-8e8e-000000000001';
+  const search = async (body) => {
+    const first = await (await chat({ sessionId: id, ...body })).json();
+    return first.done ? first : (await chat({ sessionId: id, sport: body.sport, forceSearch: true })).json();
+  };
+  const basketball = await search({ message: 'forward' });
+  assert.ok(basketball.matches.length > 0 && basketball.matches.every((p) => p.sport === 'basketball'));
+
+  const soccer = await search({ sport: 'soccer', message: 'forward with at least 10 goals' });
+  assert.deepEqual(soccer.matches.map((p) => p.lastName).slice(0, 2), ['Salah', 'Haaland']);
+  assert.ok(soccer.matches.every((p) => p.sport === 'soccer'));
+
+  const football = await search({ sport: 'football', message: 'running back with 1000 rushing yards' });
+  assert.deepEqual(football.matches.map((p) => p.lastName), ['Barkley', 'Cook III']);
+});
+
+test('each sport tab keeps its own filters', async () => {
+  const id = 'c0ffee00-4444-4d4d-8e8e-000000000002';
+  await chat({ sessionId: id, sport: 'soccer', message: 'goalkeeper' });
+  const football = await (await chat({ sessionId: id, sport: 'football', message: 'linebacker with 100 tackles' })).json();
+  assert.doesNotMatch(football.summary, /goalkeeper/);
+  const soccer = await (await chat({ sessionId: id, sport: 'soccer', message: 'at least 70 saves' })).json();
+  assert.match(soccer.summary, /goalkeeper · saves ≥ 70/);
+
+  // Done on the soccer tab clears soccer only.
+  await fetch(`${base}/api/agent/reset`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: id, sport: 'soccer' }) });
+  const footballAgain = await (await chat({ sessionId: id, sport: 'football', message: 'eagles' })).json();
+  assert.match(footballAgain.summary, /Philadelphia Eagles · linebacker · tackles ≥ 100/);
 });
 
 test('search works without a login', async () => {

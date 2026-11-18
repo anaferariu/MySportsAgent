@@ -247,7 +247,7 @@ function renderPlayers() {
   playersSubtitle.textContent = sport.tableNote;
   boxscoreSection.hidden = databaseSport !== 'basketball';
   renderTable(playersTable, columnsFor(databaseSport, DATABASE_EXTRA_COLUMNS), rows);
-  playersCount.textContent = `${rows.length} of ${inSport.length} ${sport.label.toLowerCase()} players`;
+  playersCount.textContent = `${rows.length} of ${inSport.length} ${sport.noun} players`;
 }
 
 async function fetchPlayers() {
@@ -281,26 +281,85 @@ boxscoreForm.addEventListener('submit', async (event) => {
 refreshBtn.addEventListener('click', fetchPlayers);
 playersFilter.addEventListener('input', renderPlayers);
 
-// ---------- AI Scout Assistant (basketball) ----------
+// ---------- AI Scout Assistant ----------
+//
+// One tab per sport. Each sport has its own message pane and results pane (kept
+// in the DOM and shown or hidden), and the server keeps its filters separately,
+// so switching tabs never loses a search.
 
-function addMessage(role, text) {
-  chatLog.appendChild(el('div', { className: `msg ${role}`, text }));
-  chatLog.scrollTop = chatLog.scrollHeight;
+const assistantTabs = document.getElementById('assistant-tabs');
+let assistantSport = 'basketball';
+let config = { teams: [] };
+const chatPanes = {}; // sport -> { log, results }
+
+// The Claude agent, when enabled, handles basketball; other sports use the rules.
+const usesAgent = (sport) => agentEnabled && sport === 'basketball';
+
+function paneFor(sport) {
+  if (!chatPanes[sport]) {
+    chatPanes[sport] = { log: el('div', { 'data-sport': sport }), results: el('div', { 'data-sport': sport }) };
+    chatLog.appendChild(chatPanes[sport].log);
+    chatResults.appendChild(chatPanes[sport].results);
+    greet(sport);
+  }
+  return chatPanes[sport];
 }
 
-function greet() {
-  chatLog.replaceChildren();
-  chatResults.replaceChildren();
+function addMessage(sport, role, text) {
+  paneFor(sport).log.appendChild(el('div', { className: `msg ${role}`, text }));
+  if (sport === assistantSport) chatLog.scrollTop = chatLog.scrollHeight;
+}
+
+function greet(sport) {
+  const { log, results } = chatPanes[sport];
+  log.replaceChildren();
+  results.replaceChildren();
+  const quote = (list) => list.map((q) => `"${q}"`).join(', ');
+  const search = sports[sport].search;
   addMessage(
+    sport,
     'bot',
-    agentEnabled
-      ? 'Ask me about the basketball players in the database, for example: "guard with at least 20 points per game" or "best rebounder in the WNBA".'
-      : 'Describe your target profile, for example: "guard with at least 20 points per game" or "WNBA forward, 8+ rebounds". Each message adds to your filters, so you can keep narrowing the results ("only Celtics", "35% from three", "any league" to drop one). Reply NA to skip a follow-up question. Click Done to clear everything and start a new search.'
+    usesAgent(sport)
+      ? `Ask me about the ${sports[sport].noun} players in the database, for example: ${quote(search.examples)}.`
+      : `Describe the ${sports[sport].noun} player you are looking for, for example: ${quote(search.examples)}. ` +
+          `Each message adds to your filters, so you can keep narrowing the results (${quote(search.refine)} to drop one). ` +
+          'Reply NA to skip a follow-up question. Click Done to clear everything and start a new search.'
   );
 }
 
-function renderResults(payload) {
-  chatResults.replaceChildren();
+function showAssistantSport(sport) {
+  assistantSport = sport;
+  paneFor(sport);
+  for (const [id, pane] of Object.entries(chatPanes)) {
+    pane.log.hidden = id !== sport;
+    pane.results.hidden = id !== sport;
+  }
+  renderAssistantTabs();
+
+  const teams = (config.teams || []).filter((t) => t.sport === sport).map((t) => t.team).join(', ');
+  engineStatus.textContent = usesAgent(sport)
+    ? `Search engine: Claude agent (${config.model}). Teams: ${teams}.`
+    : `Search engine: rule-based. Teams: ${teams}.`;
+  chatDoneBtn.textContent = usesAgent(sport) ? 'New chat' : 'Done';
+  chatInput.placeholder = sports[sport].search.placeholder;
+  chatLog.scrollTop = chatLog.scrollHeight;
+}
+
+function renderAssistantTabs() {
+  assistantTabs.replaceChildren(
+    ...Object.entries(sports).map(([id, sport]) => {
+      const tab = el('button', { type: 'button', role: 'tab', className: 'sport-tab', 'aria-selected': String(id === assistantSport) }, [
+        el('span', { text: `${sport.icon} ${sport.label}` })
+      ]);
+      tab.addEventListener('click', () => showAssistantSport(id));
+      return tab;
+    })
+  );
+}
+
+function renderResults(sport, payload) {
+  const { results } = paneFor(sport);
+  results.replaceChildren();
   const sections = [
     ['Matches', payload.matches],
     ['Matches with missing data', payload.separateMatches]
@@ -308,39 +367,41 @@ function renderResults(payload) {
   for (const [title, rows] of sections) {
     if (!Array.isArray(rows) || !rows.length) continue;
     const table = el('table');
-    renderTable(table, columnsFor('basketball', RESULT_EXTRA_COLUMNS), rows);
-    chatResults.append(el('h3', { text: `${title} (${rows.length})` }), el('div', { className: 'table-wrap' }, [table]));
+    renderTable(table, columnsFor(sport, RESULT_EXTRA_COLUMNS), rows);
+    results.append(el('h3', { text: `${title} (${rows.length})` }), el('div', { className: 'table-wrap' }, [table]));
   }
 }
 
-async function sendChat(message, forceSearch = false) {
+// `sport` is fixed when the message is sent, so a reply lands in the right tab
+// even if the user switches tabs while waiting.
+async function sendChat(sport, message, forceSearch = false) {
   chatInput.disabled = true;
   try {
     const res = await fetch('/api/agent/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId, message, forceSearch })
+      body: JSON.stringify({ sessionId, sport, message, forceSearch })
     });
     const payload = await res.json();
     if (!res.ok) throw new Error(payload.error || 'Search request failed');
 
-    if (payload.notice) addMessage('notice', payload.notice);
+    if (payload.notice) addMessage(sport, 'notice', payload.notice);
 
     if (!payload.done) {
-      addMessage('bot', `${payload.question} (${payload.candidatesSoFar} candidates so far)`);
+      addMessage(sport, 'bot', `${payload.question} (${payload.candidatesSoFar} candidates so far)`);
       return;
     }
 
-    addMessage('bot', payload.summary);
-    if (payload.reset) chatResults.replaceChildren();
+    addMessage(sport, 'bot', payload.summary);
+    if (payload.reset) paneFor(sport).results.replaceChildren();
     if (Array.isArray(payload.matches)) {
       if (!payload.matches.length && payload.engine === 'rules') {
-        addMessage('bot', 'No matches. Try relaxing one filter, like the points or shooting threshold.');
+        addMessage(sport, 'bot', 'No matches. Try relaxing one filter, or type "any position" / "any team" to drop one.');
       }
-      renderResults(payload);
+      renderResults(sport, payload);
     }
   } catch (error) {
-    addMessage('bot', error.message);
+    addMessage(sport, 'bot', error.message);
   } finally {
     chatInput.disabled = false;
     chatInput.focus();
@@ -351,19 +412,21 @@ chatForm.addEventListener('submit', async (event) => {
   event.preventDefault();
   const message = chatInput.value.trim();
   if (!message) return;
-  addMessage('user', message);
+  const sport = assistantSport;
+  addMessage(sport, 'user', message);
   chatInput.value = '';
-  await sendChat(message, false);
+  await sendChat(sport, message, false);
 });
 
-// Done (or "New chat" with the agent) clears the conversation and all filters.
+// Done (or "New chat" with the agent) clears this sport's conversation and filters.
 chatDoneBtn.addEventListener('click', async () => {
+  const sport = assistantSport;
   await fetch('/api/agent/reset', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ sessionId })
+    body: JSON.stringify({ sessionId, sport })
   }).catch(() => {});
-  greet();
+  greet(sport);
 });
 
 // ---------- startup ----------
@@ -371,17 +434,12 @@ chatDoneBtn.addEventListener('click', async () => {
 async function loadConfig() {
   try {
     const [configRes, sportsRes] = await Promise.all([fetch('/api/config'), fetch('/api/sports')]);
-    const config = await configRes.json();
+    config = await configRes.json();
     sports = await sportsRes.json();
     agentEnabled = Boolean(config.agentEnabled);
     videoUploadsEnabled = Boolean(config.videoUploadsEnabled);
-    const teams = (config.teams || []).filter((t) => t.sport === 'basketball').map((t) => t.team).join(', ');
-    engineStatus.textContent = agentEnabled
-      ? `Search engine: Claude agent (${config.model}). Basketball teams: ${teams}.`
-      : `Search engine: rule-based. Basketball teams: ${teams}.`;
-    chatDoneBtn.textContent = agentEnabled ? 'New chat' : 'Done';
   } catch (_error) {
-    engineStatus.textContent = '';
+    engineStatus.textContent = 'Could not load the app settings. Try reloading the page.';
   }
 }
 
@@ -389,5 +447,5 @@ async function loadConfig() {
   await loadConfig();
   renderSportCards();
   renderSportTabs();
-  greet();
+  showAssistantSport('basketball');
 })();

@@ -165,6 +165,80 @@ test('a bare number still answers the pending question', () => {
   assert.equal(session.criteria.minThreePtPercentage, 35);
 });
 
+// ---------- soccer and football ----------
+
+const allPlayers = store.readPlayers();
+const sportSearch = (sport) => {
+  const session = newSession();
+  const ps = allPlayers.filter((p) => p.sport === sport);
+  const ts = store.teams.filter((t) => t.sport === sport);
+  return (message) => runRuleChat(session, { message, forceSearch: true }, ps, ts, sport);
+};
+const top = (reply, n = 5) => names(reply.matches).slice(0, n).map((n) => n.trim());
+
+test('soccer: position, goals, assists and league', () => {
+  assert.deepEqual(top(sportSearch('soccer')('forward with at least 10 goals'), 2), ['Mohamed Salah', 'Erling Haaland']);
+  const nwsl = sportSearch('soccer')('NWSL midfielder with 5+ assists');
+  assert.deepEqual(top(nwsl), ['Sarah Schupansky']);
+  assert.match(nwsl.summary, /female · NWSL · midfielder · assists ≥ 5/);
+  assert.deepEqual(top(sportSearch('soccer')('top 3 scorers in the premier league')), ['Mohamed Salah', 'Erling Haaland', 'Luis Díaz']);
+});
+
+test('soccer: goalkeepers, cards and goal contributions', () => {
+  assert.deepEqual(top(sportSearch('soccer')('goalkeeper with 70 saves')), ['David Raya', 'Alisson Becker', 'Aubrey Kingsbury']);
+  const defenders = sportSearch('soccer')('defender with fewer than 3 yellow cards and at least 25 appearances');
+  assert.ok(defenders.matches.every((p) => p.position === 'Defender' && p.stats.yellowCards <= 3 && p.stats.apps >= 25));
+  assert.equal(parseCriteria('15 goal contributions', {}, { sport: 'soccer' }).minGoalContributions, 15);
+  assert.equal(parseCriteria('15 goal contributions', {}, { sport: 'soccer' }).minGoals, undefined);
+  assert.equal(parseCriteria('under 30 goals conceded', {}, { sport: 'soccer' }).maxGoalsAgainst, 30);
+  assert.equal(parseCriteria('no red cards', {}, { sport: 'soccer' }).maxRedCards, 0);
+  assert.equal(parseCriteria('english premier league midfielder', {}, { sport: 'soccer' }).nationality, undefined);
+});
+
+test('football: rushing, passing and interceptions', () => {
+  assert.deepEqual(top(sportSearch('football')('running back with 1000 rushing yards')), ['Saquon Barkley', 'James Cook III']);
+  const qb = parseCriteria('quarterback with 25 passing touchdowns and under 10 interceptions', {}, { sport: 'football' });
+  assert.deepEqual([qb.position, qb.minPassTd, qb.maxPassInt, qb.minDefInt], ['quarterback', 25, 10, undefined]);
+  assert.deepEqual(top(sportSearch('football')('quarterback with 25 passing touchdowns and under 10 interceptions')), ['Josh Allen']);
+  // "2 interceptions" for a defender means interceptions made, not thrown.
+  const cb = parseCriteria('cornerback with at least 2 interceptions', {}, { sport: 'football' });
+  assert.deepEqual([cb.minDefInt, cb.maxPassInt], [2, undefined]);
+});
+
+test('football: generic yards depend on the position', () => {
+  assert.equal(parseCriteria('receiver with 800 yards', {}, { sport: 'football' }).minScrimmageYds, 800);
+  assert.equal(parseCriteria('quarterback with 3500 yards', {}, { sport: 'football' }).minPassYds, 3500);
+  assert.equal(parseCriteria('1000 rushing yards and 5 yards per carry', {}, { sport: 'football' }).minRushYds, 1000);
+});
+
+test('football: rankings and ratio filters need a minimum volume', () => {
+  const rush = sportSearch('football')('best pass rusher');
+  assert.equal(rush.done, true); // a ranking is answered without follow-up questions
+  assert.equal(top(rush, 1)[0], 'George Karlaftis');
+  const kickers = sportSearch('football')('kicker with 80% field goal');
+  assert.deepEqual(top(kickers), ['Harrison Butker', 'Tyler Bass']); // not the 3-for-3 backup
+  assert.match(kickers.summary, /FG attempts ≥ 10/);
+  assert.deepEqual(top(sportSearch('football')('most accurate quarterback')), ['Jalen Hurts', 'Patrick Mahomes', 'Josh Allen']);
+});
+
+test('football: position groups', () => {
+  const db = sportSearch('football')('defensive backs with 4 interceptions');
+  assert.deepEqual(top(db), ['C.J. Gardner-Johnson', 'Reed Blankenship']);
+});
+
+test('football: a broad query asks for the position first', () => {
+  const session = newSession();
+  const ps = allPlayers.filter((p) => p.sport === 'football');
+  const ts = store.teams.filter((t) => t.sport === 'football');
+  const first = runRuleChat(session, { message: 'NFL players' }, ps, ts, 'football');
+  assert.match(first.question, /Which position/);
+  const second = runRuleChat(session, { message: 'linebacker' }, ps, ts, 'football');
+  assert.match(second.question, /Minimum tackles/);
+  const third = runRuleChat(session, { message: '100' }, ps, ts, 'football');
+  assert.equal(third.done, true);
+  assert.ok(third.matches.every((p) => p.position === 'Linebacker' && p.stats.tackles >= 100));
+});
+
 test('agent tool input maps onto the same criteria', () => {
   const criteria = validateSearchInput({ position: 'guard', min_points_per_game: 20, team: 'okc' }, teams);
   assert.equal(criteria.team, 'Oklahoma City Thunder');
